@@ -1,0 +1,16 @@
+.env
+*.db
+*.sqlite*
+donnees/
+knowledge/*
+!knowledge/.gitkeep
+config/entreprise.yaml
+config/prompts.yaml
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
+.vscode/
+.idea/

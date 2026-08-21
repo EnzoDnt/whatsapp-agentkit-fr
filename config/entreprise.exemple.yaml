@@ -1,0 +1,25 @@
+# Exemple rempli — l'agent génère votre config/entreprise.yaml à partir de l'entretien.
+entreprise:
+  nom: "Maison Lorette"
+  activite: >
+    Boulangerie-pâtisserie artisanale au 14 rue Bossuet, 69006 Lyon.
+    Pains au levain, viennoiseries pur beurre, pâtisseries et gâteaux de
+    cérémonie sur commande. Particuliers du quartier et entreprises.
+  horaires: "Du mardi au samedi 7h00-19h30, dimanche 7h00-13h00, fermé le lundi"
+  telephone: "04 78 00 00 00"
+  adresse: "14 rue Bossuet, 69006 Lyon"
+
+agent:
+  nom: "Camille"
+  ton: "amical et décontracté"
+  cas_usage:
+    - "répondre aux questions fréquentes"
+    - "prendre les commandes"
+
+# Délais minimaux, en heures. Vérifiés EN CODE par l'outil verifier_delai :
+# le modèle ne peut pas les contourner par complaisance.
+delais_heures:
+  standard: 0
+  sans_gluten: 24
+  entreprise: 48
+  ceremonie: 72
