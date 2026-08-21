@@ -131,6 +131,8 @@ dans `knowledge/` — tu les liras.
 
 ### Étape 3 — Brancher WhatsApp pour de vrai
 
+**Suis `SETUP-META.md`** : chaque étape y est décrite avec sa vérification.
+
 1. 🔴 L'utilisateur crée l'app Meta + produit WhatsApp (bloc « J'ai besoin de toi »)
 2. 🔴 Il te donne : App ID, App Secret, Phone Number ID, token d'accès
 3. ✅ Tu écris le `.env`, tu passes `WHATSAPP_PROVIDER=meta`
@@ -139,6 +141,12 @@ dans `knowledge/` — tu les liras.
 6. ✅ Tu vérifies l'abonnement et tu le testes
 7. 🔴 Il ajoute son propre numéro comme destinataire de test, puis **écrit sur WhatsApp**
 8. ✅ Tu lis les logs et confirmes que la réponse est partie
+
+### Étape 3 bis — Back-office (optionnel, recommandé)
+
+Si l'utilisateur veut pouvoir lire les conversations et reprendre la main :
+génère `ADMIN_TOKEN` (`openssl rand -hex 24`), ajoute-le au `.env`, et indique-lui
+`/admin`. Sans ce jeton, le back-office n'est pas monté du tout.
 
 ### Étape 4 — Mise en production (seulement si demandé)
 

@@ -11,13 +11,28 @@ from fastapi import Request
 
 @dataclass
 class MessageEntrant:
-    """Message normalisé : format identique quel que soit le fournisseur."""
+    """
+    Message normalisé : format identique quel que soit le fournisseur.
 
-    telephone: str          # E.164 sans le "+"
+    `identifiant` est la clé de conversation. Ce n'est PAS toujours un numéro :
+    depuis juillet 2026, un client ayant adopté un username WhatsApp peut écrire
+    sans partager son numéro. Meta livre alors un BSUID (business-scoped user ID)
+    et laisse `from` vide. Tout le code doit donc parler d'identifiant, pas de
+    téléphone — sinon ces clients sont purement ignorés.
+    """
+
+    identifiant: str        # numéro E.164 sans "+", OU BSUID
     texte: str
     message_id: str
     est_sortant: bool       # True si c'est l'agent qui l'a envoyé — on l'ignore
+    par_bsuid: bool = False  # True si l'identifiant est un BSUID et non un numéro
+    username: str = ""       # @pseudo, si le client en a adopté un
     contexte: dict = field(default_factory=dict)
+
+    @property
+    def telephone(self) -> str:
+        """Compatibilité : ancien nom du champ."""
+        return self.identifiant
 
 
 class ErreurConfiguration(RuntimeError):
@@ -34,7 +49,7 @@ class FournisseurWhatsApp(ABC):
 
     @abstractmethod
     async def envoyer_message(
-        self, telephone: str, message: str, contexte: dict | None = None
+        self, destinataire: str, message: str, contexte: dict | None = None
     ) -> bool: ...
 
     @abstractmethod

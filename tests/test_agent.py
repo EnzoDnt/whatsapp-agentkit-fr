@@ -179,3 +179,80 @@ def test_un_outil_inconnu_ne_fait_pas_tomber_l_agent():
     from agent.tools import executer_outil
 
     assert "inconnu" in executer_outil("outil_qui_n_existe_pas", {}).lower()
+
+
+# ── Usernames WhatsApp / BSUID (juillet 2026) ────────────────────────────
+
+def _parser(payload):
+    import asyncio
+
+    os.environ["META_APP_SECRET"] = "secret"
+    os.environ["META_ACCESS_TOKEN"] = "x"
+    os.environ["META_PHONE_NUMBER_ID"] = "y"
+    import agent.providers.base as base
+    import agent.providers.meta as meta
+
+    importlib.reload(base)
+    importlib.reload(meta)
+
+    class FausseRequete:
+        def __init__(self, d): self._d = d
+        async def json(self): return self._d
+
+    return asyncio.run(meta.FournisseurMeta().parser_webhook(FausseRequete(payload)))
+
+
+def _payload(msg, contacts):
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [{"id": "0", "changes": [{"field": "messages",
+                   "value": {"messaging_product": "whatsapp",
+                             "metadata": {"phone_number_id": "y"},
+                             "contacts": contacts, "messages": [msg]}}]}],
+    }
+
+
+def test_client_avec_username_sans_numero_est_bien_recu():
+    """
+    Le cas qui casse la plupart des intégrations : `from` est vide, seul le
+    BSUID identifie le client. Sans ce traitement, le message est perdu.
+    """
+    bsuid = "user.9373795779eb6441c8adb2eaee5b848e7dd174ddd302d7db62142f4722d574b6"
+    messages = _parser(_payload(
+        {"from": "", "from_user_id": bsuid, "id": "wamid.X", "type": "text",
+         "text": {"body": "Bonjour"}},
+        [{"profile": {"name": "Pablo M.", "username": "@pablomorales"}, "wa_id": "", "user_id": bsuid}],
+    ))
+    assert len(messages) == 1
+    assert messages[0].identifiant == bsuid
+    assert messages[0].par_bsuid is True
+    assert messages[0].username == "@pablomorales"
+
+
+def test_le_numero_reste_prioritaire_quand_il_est_fourni():
+    bsuid = "user.abc123"
+    messages = _parser(_payload(
+        {"from": "33612345678", "from_user_id": bsuid, "id": "wamid.Y", "type": "text",
+         "text": {"body": "Salut"}},
+        [{"profile": {"name": "Léa"}, "wa_id": "33612345678", "user_id": bsuid}],
+    ))
+    assert messages[0].identifiant == "33612345678"
+    assert messages[0].par_bsuid is False
+    assert messages[0].contexte["bsuid"] == bsuid
+
+
+def test_un_message_sans_aucun_identifiant_est_ignore_sans_planter():
+    messages = _parser(_payload(
+        {"from": "", "from_user_id": "", "id": "wamid.Z", "type": "text",
+         "text": {"body": "fantôme"}}, [],
+    ))
+    assert messages == []
+
+
+def test_le_bsuid_est_masque_dans_les_logs():
+    from agent.securite import masquer_identifiant
+
+    bsuid = "user.9373795779eb6441c8adb2eaee5b848e7dd174ddd302d7db62142f4722d574b6"
+    masque = masquer_identifiant(bsuid, par_bsuid=True)
+    assert bsuid not in masque
+    assert masque.startswith("bsuid_")

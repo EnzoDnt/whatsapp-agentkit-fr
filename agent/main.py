@@ -26,7 +26,7 @@ from agent.memory import (
     purger_donnees_expirees,
 )
 from agent.providers import ErreurConfiguration, MessageEntrant, obtenir_fournisseur
-from agent.securite import depenses, limiteur, masquer_contenu, masquer_telephone
+from agent.securite import depenses, limiteur, masquer_contenu, masquer_identifiant
 
 load_dotenv()
 
@@ -70,6 +70,7 @@ async def cycle_de_vie(app: FastAPI):
         erreur_configuration = str(e)
         logger.error(f"Configuration invalide :\n{e}")
     else:
+        app.state.fournisseur = fournisseur
         logger.info(f"Fournisseur WhatsApp : {fournisseur.nom}")
         ok, detail = await fournisseur.verifier_connexion()
         etat_fournisseur = {"ok": ok, "detail": detail}
@@ -79,6 +80,16 @@ async def cycle_de_vie(app: FastAPI):
 
 
 app = FastAPI(title="AgentKit FR — Agent WhatsApp", version="1.0.0", lifespan=cycle_de_vie)
+
+# Back-office : monté seulement si ADMIN_TOKEN est défini. Il expose des
+# conversations clients, il ne doit jamais être accessible par défaut.
+from agent.admin import ADMIN_TOKEN, est_en_pause, routeur as routeur_admin  # noqa: E402
+
+if ADMIN_TOKEN:
+    app.include_router(routeur_admin)
+    logger.info("Back-office actif sur /admin (protégé par ADMIN_TOKEN)")
+else:
+    logger.info("Back-office désactivé : ADMIN_TOKEN non défini")
 
 
 @app.get("/")
@@ -143,10 +154,10 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
         if msg.est_sortant or not msg.texte.strip():
             continue
 
-        autorise, restants = limiteur.autoriser(msg.telephone)
+        autorise, restants = limiteur.autoriser(msg.identifiant)
         if not autorise:
             logger.warning(
-                f"Limite de débit atteinte pour {masquer_telephone(msg.telephone)} : message ignoré"
+                f"Limite de débit atteinte pour {masquer_identifiant(msg.identifiant, msg.par_bsuid)} : message ignoré"
             )
             continue
 
@@ -157,7 +168,8 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
             continue
 
         logger.info(
-            f"Message de {masquer_telephone(msg.telephone)} : {masquer_contenu(msg.texte)} "
+            f"Message de {masquer_identifiant(msg.identifiant, msg.par_bsuid)}"
+            f"{' (via username)' if msg.par_bsuid else ''} : {masquer_contenu(msg.texte)} "
             f"({restants} restants dans la fenêtre)"
         )
         taches.add_task(traiter_message, msg)
@@ -170,16 +182,26 @@ async def traiter_message(msg: MessageEntrant) -> None:
     """Génère la réponse et la renvoie. S'exécute hors du cycle du webhook."""
     evenement_id = msg.contexte.get("evenement_id") or msg.message_id
 
-    async with _verrous[msg.telephone]:
+    async with _verrous[msg.identifiant]:
         try:
+            # Un humain a repris la main : on enregistre le message du client
+            # pour qu'il apparaisse dans le back-office, mais l'agent se tait.
+            if ADMIN_TOKEN and await est_en_pause(msg.identifiant):
+                await enregistrer_message(msg.identifiant, "user", msg.texte)
+                logger.info(
+                    f"Conversation en pause ({masquer_identifiant(msg.identifiant, msg.par_bsuid)}) : "
+                    "l'agent ne répond pas"
+                )
+                return
+
             # L'historique est lu AVANT d'enregistrer le message courant :
             # brain.py ajoute le nouveau message à la fin, sinon il serait en double.
-            historique = await obtenir_historique(msg.telephone)
+            historique = await obtenir_historique(msg.identifiant)
             reponse, vraie_reponse = await generer_reponse(
-                msg.texte, historique, telephone=msg.telephone
+                msg.texte, historique, telephone=msg.identifiant
             )
 
-            envoye = await fournisseur.envoyer_message(msg.telephone, reponse, msg.contexte)
+            envoye = await fournisseur.envoyer_message(msg.identifiant, reponse, msg.contexte)
 
             if not envoye:
                 # L'événement a été marqué traité en amont pour bloquer les doublons.
@@ -189,20 +211,28 @@ async def traiter_message(msg: MessageEntrant) -> None:
                 await liberer_evenement(evenement_id)
                 return
 
-            # Seule la vraie conversation entre dans l'historique. Un message
-            # technique (« problème technique ») n'est pas un tour de dialogue :
-            # le garder polluerait le contexte de tous les messages suivants.
-            if vraie_reponse:
-                await enregistrer_message(msg.telephone, "user", msg.texte)
-                await enregistrer_message(msg.telephone, "assistant", reponse)
+            # Le message du CLIENT est toujours conservé, même quand l'agent a
+            # échoué : sinon la trace disparaît alors que c'est justement le cas
+            # où un humain doit reprendre la main depuis le back-office.
+            await enregistrer_message(msg.identifiant, "user", msg.texte)
 
-            logger.info(f"Réponse envoyée à {masquer_telephone(msg.telephone)}")
+            # La réponse de l'AGENT n'y entre que si c'en est vraiment une. Un
+            # avis technique (« problème technique ») n'est pas un tour de
+            # dialogue : le garder polluerait le contexte des messages suivants.
+            if vraie_reponse:
+                await enregistrer_message(msg.identifiant, "assistant", reponse)
+            else:
+                logger.warning(
+                    "Le client n'a pas eu de vraie réponse : à reprendre depuis /admin"
+                )
+
+            logger.info(f"Réponse envoyée à {masquer_identifiant(msg.identifiant, msg.par_bsuid)}")
 
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Erreur de traitement : {e}")
             await liberer_evenement(evenement_id)
             try:
-                await fournisseur.envoyer_message(msg.telephone, message_erreur(), msg.contexte)
+                await fournisseur.envoyer_message(msg.identifiant, message_erreur(), msg.contexte)
             except Exception:  # noqa: BLE001
                 logger.error("Impossible même de prévenir le client")
 

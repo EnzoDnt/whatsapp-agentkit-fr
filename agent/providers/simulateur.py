@@ -74,10 +74,10 @@ class FournisseurSimulateur(FournisseurMeta):
         super().__init__()
 
     async def envoyer_message(
-        self, telephone: str, message: str, contexte: dict | None = None
+        self, destinataire: str, message: str, contexte: dict | None = None
     ) -> bool:
         await file_sortante.ajouter(message)
-        logger.info(f"[simulateur] réponse remise à {masquer_telephone(telephone)}")
+        logger.info(f"[simulateur] réponse remise à {masquer_telephone(destinataire)}")
         return True
 
     async def verifier_connexion(self) -> tuple[bool, str]:

@@ -92,24 +92,64 @@ class FournisseurMeta(FournisseurWhatsApp):
         return valide
 
     async def parser_webhook(self, request: Request) -> list[MessageEntrant]:
+        """
+        Lit le payload imbriqué de Meta.
+
+        Depuis juillet 2026, un client ayant adopté un username WhatsApp peut
+        écrire sans partager son numéro : Meta met alors `from` à la chaîne vide
+        et fournit un BSUID dans `from_user_id`. Lire uniquement `from` — ce que
+        font encore beaucoup d'intégrations — revient à ignorer purement et
+        simplement ces clients.
+
+        Meta ne renvoie le numéro que pendant 30 jours après le dernier échange
+        avec ce numéro. Passé ce délai, un client existant réapparaît comme un
+        inconnu si l'on ne s'appuie pas sur le BSUID. Le BSUID est donc
+        l'identifiant de référence dès qu'il est présent et que le numéro manque.
+        """
         corps = await request.json()
         messages: list[MessageEntrant] = []
 
         for entree in corps.get("entry", []):
             for changement in entree.get("changes", []):
                 valeur = changement.get("value") or {}
+
+                # Le username vit dans contacts[], pas dans messages[].
+                usernames: dict[str, str] = {}
+                for contact in valeur.get("contacts", []):
+                    pseudo = (contact.get("profile") or {}).get("username", "")
+                    for cle in (contact.get("wa_id"), contact.get("user_id")):
+                        if cle and pseudo:
+                            usernames[cle] = pseudo
+
                 for msg in valeur.get("messages", []):
                     if msg.get("type") != "text":
                         # images, audio, documents : hors périmètre pour l'instant.
                         logger.info(f"Message de type '{msg.get('type')}' ignoré")
                         continue
+
+                    telephone = (msg.get("from") or "").strip()
+                    bsuid = (msg.get("from_user_id") or "").strip()
+                    identifiant = telephone or bsuid
+
+                    if not identifiant:
+                        logger.warning(
+                            "Message sans identifiant exploitable (ni from ni from_user_id) : ignoré"
+                        )
+                        continue
+
                     messages.append(
                         MessageEntrant(
-                            telephone=msg.get("from", ""),
+                            identifiant=identifiant,
                             texte=(msg.get("text") or {}).get("body", ""),
                             message_id=msg.get("id", ""),
                             est_sortant=False,
-                            contexte={"evenement_id": msg.get("id", "")},
+                            par_bsuid=not telephone,
+                            username=usernames.get(identifiant, ""),
+                            contexte={
+                                "evenement_id": msg.get("id", ""),
+                                "bsuid": bsuid,
+                                "telephone": telephone,
+                            },
                         )
                     )
         return messages
@@ -117,8 +157,16 @@ class FournisseurMeta(FournisseurWhatsApp):
     # ── Envoi ────────────────────────────────────────────────────────────
 
     async def envoyer_message(
-        self, telephone: str, message: str, contexte: dict | None = None
+        self, destinataire: str, message: str, contexte: dict | None = None
     ) -> bool:
+        """
+        Envoie un message texte.
+
+        Sur POST /{phone_number_id}/messages, le champ `to` accepte aussi bien
+        un numéro qu'un BSUID — inutile de distinguer les deux ici.
+        (Le champ `recipient` séparé n'existe que sur /marketing_messages.)
+        """
+        telephone = destinataire
         if not self.token or not self.phone_number_id:
             logger.error("Envoi impossible : META_ACCESS_TOKEN ou META_PHONE_NUMBER_ID manquant")
             return False

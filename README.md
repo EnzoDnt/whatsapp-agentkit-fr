@@ -60,6 +60,40 @@ Il **agit**, il ne fait pas que discuter. Quatre outils réellement exécutés :
 
 ---
 
+## Back-office minimal
+
+Volontairement réduit à l'essentiel : lire ce que l'agent a répondu, et reprendre
+la main quand il le faut.
+
+- La liste des conversations, la plus récente d'abord
+- L'historique complet de chacune
+- **Reprendre la main** : l'agent se tait sur cette conversation, vous répondez
+  vous-même — et votre réponse entre dans l'historique, pour que l'agent sache
+  ce qui a été dit quand il reprend
+- Effacer une conversation (droit à l'effacement)
+
+Activez-le en définissant `ADMIN_TOKEN` dans `.env`, puis ouvrez `/admin`. Sans
+ce jeton, les routes ne sont pas montées du tout — cette interface expose des
+conversations clients.
+
+Le message d'un client est **toujours** conservé, même quand l'agent échoue :
+c'est justement là qu'un humain doit intervenir.
+
+---
+
+## Usernames WhatsApp (2026)
+
+Depuis juillet 2026, un client peut vous écrire **sans partager son numéro**.
+Meta envoie alors un identifiant BSUID et laisse le champ `from` vide. Beaucoup
+d'intégrations lisent uniquement `from` et **ignorent purement et simplement ces
+clients**. Le kit ingère les deux.
+
+À savoir : un *username business* ne remplace pas le numéro de téléphone. Il se
+réserve après, et ne masque pas le numéro de l'entreprise. Pour ouvrir un compte
+WhatsApp Business API, un numéro reste obligatoire.
+
+---
+
 ## Sécurité et RGPD
 
 Pensé pour être déployé chez de vrais clients :

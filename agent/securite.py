@@ -50,6 +50,21 @@ def masquer_telephone(telephone: str) -> str:
     return f"tel_{empreinte}…{telephone[-2:]}"
 
 
+def masquer_identifiant(identifiant: str, par_bsuid: bool = False) -> str:
+    """
+    Masque un identifiant de conversation, numéro OU BSUID.
+
+    Un BSUID est déjà opaque (il n'expose pas le numéro), mais il reste une
+    donnée personnelle : il identifie une personne de façon stable. On le
+    tronque donc au lieu de le journaliser en entier.
+    """
+    if not identifiant:
+        return "client_inconnu"
+    if par_bsuid or len(identifiant) > 20:
+        return f"bsuid_{identifiant[-8:]}"
+    return masquer_telephone(identifiant)
+
+
 def masquer_contenu(texte: str, maximum: int = 60) -> str:
     """
     Le contenu d'un message client ne part pas dans les logs par défaut.

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Back-office — AgentKit FR</title>
+<style>
+  :root{--fond:#0f1518;--panneau:#161f24;--bord:#243138;--texte:#e9edef;--discret:#8696a0;--accent:#25d366;--alerte:#f0a04b}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:flex;background:var(--fond);color:var(--texte);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;font-size:14px}
+  aside{width:310px;border-right:1px solid var(--bord);display:flex;flex-direction:column;flex:0 0 auto}
+  aside h1{font-size:14px;margin:0;padding:16px;border-bottom:1px solid var(--bord);letter-spacing:.3px}
+  #liste{overflow-y:auto;flex:1}
+  .conv{padding:12px 16px;border-bottom:1px solid var(--bord);cursor:pointer}
+  .conv:hover{background:var(--panneau)}
+  .conv.actif{background:var(--panneau);border-left:3px solid var(--accent);padding-left:13px}
+  .conv .id{font-weight:600;font-size:13px}
+  .conv .meta{font-size:11.5px;color:var(--discret);margin-top:3px}
+  .puce{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;
+        background:var(--alerte);color:#241a08;font-weight:700;margin-left:6px}
+  main{flex:1;display:flex;flex-direction:column;min-width:0}
+  header{padding:13px 18px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:12px}
+  header .qui{font-weight:600}
+  button{background:var(--panneau);border:1px solid var(--bord);color:var(--texte);
+         border-radius:7px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--discret)}
+  button.primaire{background:var(--accent);color:#04231a;border-color:var(--accent);font-weight:600}
+  #fil{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:9px}
+  .msg{max-width:74%;padding:9px 12px;border-radius:9px;line-height:1.45;white-space:pre-wrap}
+  .user{align-self:flex-start;background:var(--panneau);border:1px solid var(--bord)}
+  .assistant{align-self:flex-end;background:#0c3b30}
+  .date{display:block;font-size:10.5px;color:var(--discret);margin-top:4px}
+  footer{padding:12px 18px;border-top:1px solid var(--bord);display:flex;gap:9px}
+  #texte{flex:1;background:var(--panneau);border:1px solid var(--bord);border-radius:8px;
+         padding:10px 13px;color:var(--texte);font-size:14px;outline:none;font-family:inherit}
+  .vide{margin:auto;color:var(--discret);text-align:center;line-height:1.7}
+  #jeton{margin:auto;display:flex;flex-direction:column;gap:11px;width:330px;text-align:center}
+  #jeton input{background:var(--panneau);border:1px solid var(--bord);border-radius:8px;
+               padding:10px 13px;color:var(--texte);font-size:14px;outline:none;font-family:inherit}
+</style>
+</head>
+<body>
+<div id="connexion" style="display:flex;width:100%">
+  <div id="jeton">
+    <h1 style="font-size:16px;margin:0">Back-office AgentKit</h1>
+    <p style="color:var(--discret);margin:0;font-size:13px">Entrez la valeur d'<code>ADMIN_TOKEN</code> de votre <code>.env</code>.</p>
+    <input id="champ-jeton" type="password" placeholder="Jeton d'administration" autocomplete="off">
+    <button class="primaire" onclick="connecter()">Ouvrir</button>
+    <p id="err" style="color:#e77;font-size:12.5px;margin:0;min-height:16px"></p>
+  </div>
+</div>
+
+<aside style="display:none"><h1>Conversations</h1><div id="liste"></div></aside>
+<main style="display:none">
+  <header>
+    <span class="qui" id="qui">—</span>
+    <span id="etat-pause" style="color:var(--discret);font-size:12px"></span>
+    <span style="margin-left:auto;display:flex;gap:8px">
+      <button id="btn-pause" onclick="basculerPause()">Reprendre la main</button>
+      <button onclick="effacer()" title="Droit à l'effacement (RGPD)">Effacer</button>
+    </span>
+  </header>
+  <div id="fil"><div class="vide">Choisissez une conversation à gauche.</div></div>
+  <footer>
+    <input id="texte" placeholder="Répondre en tant qu'humain…" autocomplete="off">
+    <button class="primaire" onclick="repondre()">Envoyer</button>
+  </footer>
+</main>
+
+<script>
+let JETON = '', courant = null, enPause = false;
+const $ = s => document.querySelector(s);
+const api = (chemin, options = {}) => fetch('/admin' + chemin, {
+  ...options, headers: {'X-Admin-Token': JETON, 'Content-Type': 'application/json', ...(options.headers||{})}
+});
+
+async function connecter(){
+  JETON = $('#champ-jeton').value.trim();
+  const r = await api('/conversations');
+  if(!r.ok){ $('#err').textContent = 'Jeton refusé.'; return; }
+  $('#connexion').style.display = 'none';
+  document.querySelector('aside').style.display = 'flex';
+  document.querySelector('main').style.display = 'flex';
+  charger(); setInterval(charger, 5000);
+}
+
+async function charger(){
+  const r = await api('/conversations'); if(!r.ok) return;
+  const d = await r.json();
+  $('#liste').innerHTML = d.conversations.map(c => `
+    <div class="conv ${c.identifiant===courant?'actif':''}" onclick="ouvrir(${JSON.stringify(c.identifiant)})">
+      <div class="id">${c.affichage}${c.en_pause?'<span class="puce">HUMAIN</span>':''}</div>
+      <div class="meta">${c.messages} messages · ${c.dernier ? new Date(c.dernier).toLocaleString('fr-FR') : ''}</div>
+    </div>`).join('') || '<div class="vide" style="padding:24px">Aucune conversation.</div>';
+}
+
+async function ouvrir(id){
+  courant = id;
+  const r = await api('/conversations/' + encodeURIComponent(id)); if(!r.ok) return;
+  const d = await r.json();
+  enPause = d.en_pause;
+  $('#qui').textContent = d.affichage;
+  $('#etat-pause').textContent = enPause ? '· agent en pause' : '· agent actif';
+  $('#btn-pause').textContent = enPause ? "Rendre la main à l'agent" : 'Reprendre la main';
+  $('#fil').innerHTML = d.messages.map(m => `
+    <div class="msg ${m.role}">${m.contenu.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}
+      <span class="date">${m.role==='user'?'Client':'Agent / équipe'} · ${new Date(m.date).toLocaleString('fr-FR')}</span>
+    </div>`).join('') || '<div class="vide">Conversation vide.</div>';
+  $('#fil').scrollTop = $('#fil').scrollHeight;
+  charger();
+}
+
+async function basculerPause(){
+  if(!courant) return;
+  await api(`/conversations/${encodeURIComponent(courant)}/pause`, {
+    method:'POST', body: JSON.stringify({en_pause: !enPause})});
+  ouvrir(courant);
+}
+
+async function repondre(){
+  const texte = $('#texte').value.trim(); if(!texte || !courant) return;
+  const r = await api(`/conversations/${encodeURIComponent(courant)}/repondre`, {
+    method:'POST', body: JSON.stringify({texte})});
+  if(r.ok){ $('#texte').value = ''; ouvrir(courant); }
+  else { alert("Envoi impossible : " + (await r.json().catch(()=>({}))).detail); }
+}
+
+async function effacer(){
+  if(!courant || !confirm("Effacer définitivement l'historique de cette conversation ?")) return;
+  await api('/conversations/' + encodeURIComponent(courant), {method:'DELETE'});
+  courant = null; $('#fil').innerHTML = '<div class="vide">Historique effacé.</div>'; charger();
+}
+
+$('#texte').addEventListener('keydown', e => { if(e.key==='Enter') repondre(); });
+$('#champ-jeton').addEventListener('keydown', e => { if(e.key==='Enter') connecter(); });
+</script>
+</body>
+</html>
