@@ -256,3 +256,32 @@ def test_le_bsuid_est_masque_dans_les_logs():
     masque = masquer_identifiant(bsuid, par_bsuid=True)
     assert bsuid not in masque
     assert masque.startswith("bsuid_")
+
+
+def test_le_numero_n_est_injecte_que_dans_les_outils_qui_l_acceptent():
+    """
+    Régression : injecter `telephone` dans tous les appels d'outils lève un
+    TypeError sur ceux qui ne le déclarent pas, et le client perd sa réponse.
+    """
+    from agent.tools import outil_accepte
+
+    assert outil_accepte("enregistrer_demande", "telephone") is True
+    assert outil_accepte("transferer_a_humain", "telephone") is True
+    assert outil_accepte("rechercher_information", "telephone") is False
+    assert outil_accepte("verifier_delai", "telephone") is False
+    assert outil_accepte("outil_inexistant", "telephone") is False
+
+
+def test_la_date_du_jour_est_injectee_dans_le_prompt():
+    """
+    Sans la date, le modèle ne peut pas interpréter « demain » et invente une
+    date — inacceptable pour un agent qui prend des commandes datées.
+    """
+    from datetime import datetime
+
+    from agent.brain import horodatage
+
+    h = horodatage()
+    assert datetime.now().strftime("%Y-%m-%d") in h
+    assert str(datetime.now().year) in h
+    assert "AAAA-MM-JJ" in h

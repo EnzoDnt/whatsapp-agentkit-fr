@@ -47,6 +47,20 @@ def schemas_outils() -> list[dict]:
     return [schema for schema, _ in _REGISTRE.values()]
 
 
+def outil_accepte(nom: str, parametre: str) -> bool:
+    """
+    L'outil déclare-t-il ce paramètre ?
+
+    Sert à n'injecter le numéro du client que dans les outils qui l'attendent :
+    l'ajouter partout provoque un TypeError sur les autres, et le client perd
+    sa réponse sans que rien n'indique pourquoi.
+    """
+    entree = _REGISTRE.get(nom)
+    if entree is None:
+        return False
+    return parametre in (entree[0]["input_schema"].get("properties") or {})
+
+
 def executer_outil(nom: str, arguments: dict) -> str:
     """
     Exécute un outil et retourne un résultat textuel pour Claude.

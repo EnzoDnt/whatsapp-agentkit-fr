@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
 
 import yaml
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
 from agent.securite import depenses, masquer_telephone
-from agent.tools import executer_outil, schemas_outils
+from agent.tools import executer_outil, outil_accepte, schemas_outils
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -54,6 +55,35 @@ def charger_config_prompts() -> dict:
 def prompt_systeme() -> str:
     return charger_config_prompts().get(
         "system_prompt", "Tu es un assistant utile. Réponds toujours en français."
+    )
+
+
+JOURS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+MOIS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+        "août", "septembre", "octobre", "novembre", "décembre")
+
+
+def horodatage() -> str:
+    """
+    La date du jour, en clair, à ajouter au prompt système.
+
+    Sans elle, le modèle ignore la date : il ne peut pas interpréter « demain »,
+    « samedi prochain » ou « dans deux semaines », et il invente une date. Pour
+    un agent qui prend des commandes datées, c'est rédhibitoire.
+
+    Placé en FIN de prompt système à dessein : c'est la seule partie qui change
+    à chaque appel. Si vous activez un jour le cache de prompt, tout ce qui
+    précède reste ainsi réutilisable.
+    """
+    m = datetime.now()
+    return (
+        f"\n\n## Date et heure actuelles\n"
+        f"Nous sommes le {JOURS[m.weekday()]} {m.day} {MOIS[m.month - 1]} {m.year}, "
+        f"il est {m:%H}h{m:%M}.\n"
+        f"Format à passer aux outils qui attendent une date : AAAA-MM-JJ HH:MM "
+        f"(aujourd'hui = {m:%Y-%m-%d}).\n"
+        f"Calcule toujours les dates à partir de celle-ci. Ne demande jamais au "
+        f"client quel jour on est."
     )
 
 
@@ -124,7 +154,7 @@ async def generer_reponse(
     messages: list[dict] = [{"role": m["role"], "content": m["content"]} for m in historique]
     messages.append({"role": "user", "content": message})
 
-    systeme = prompt_systeme()
+    systeme = prompt_systeme() + horodatage()
     outils = schemas_outils()
 
     async def appeler(extra: dict):
@@ -192,8 +222,10 @@ async def generer_reponse(
 
             # Le numéro vient du webhook, jamais du modèle : sinon une injection
             # de prompt pourrait lui faire enregistrer une demande au nom d'un
-            # autre client, ou lire la conversation de quelqu'un d'autre.
-            if "telephone" in arguments or telephone:
+            # autre client. Mais on ne l'injecte QUE dans les outils qui le
+            # déclarent — l'ajouter aux autres lève un TypeError et fait perdre
+            # sa réponse au client.
+            if telephone and outil_accepte(bloc.name, "telephone"):
                 arguments["telephone"] = telephone
 
             logger.info(f"Outil appelé : {bloc.name}")
