@@ -266,7 +266,9 @@ async def _convertir_media(msg: MessageEntrant) -> bool:
     trace = f"[{msg.type_media or 'fichier'} reçu, non traité automatiquement]"
     if msg.legende:
         trace += f" {msg.legende}"
-    await enregistrer_message(msg.identifiant, "user", trace)
+    # Le fichier a pu être conservé même si sa conversion a échoué : on
+    # rattache sa clé pour que l'humain puisse le consulter dans la console.
+    await enregistrer_message(msg.identifiant, "user", trace, media_cle=msg.media_cle)
 
     await enregistrer_escalade(
         identifiant=msg.identifiant,
@@ -346,7 +348,9 @@ async def traiter_message(msg: MessageEntrant) -> None:
             # Le message du CLIENT est toujours conservé, même quand l'agent a
             # échoué : sinon la trace disparaît alors que c'est justement le cas
             # où un humain doit reprendre la main depuis le back-office.
-            await enregistrer_message(msg.identifiant, "user", msg.texte)
+            await enregistrer_message(
+                msg.identifiant, "user", msg.texte, media_cle=msg.media_cle
+            )
 
             # La réponse de l'AGENT n'y entre que si c'en est vraiment une. Un
             # avis technique (« problème technique ») n'est pas un tour de

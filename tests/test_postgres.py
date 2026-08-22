@@ -254,3 +254,58 @@ class TestPostgres:
             return await memoire_pg.conversation_en_pause("336")
 
         assert executer(memoire_pg, scenario) is True
+
+
+class TestMigrationPostgres:
+    """
+    La migration doit fonctionner sur PostgreSQL, pas seulement sur SQLite.
+
+    Une version antérieure interrogeait les colonnes avec PRAGMA, qui n'existe
+    que sous SQLite : l'exception était interceptée et TOUTE la migration
+    sautée. En production — là où PostgreSQL est justement recommandé — aucune
+    colonne n'était donc jamais ajoutée, et la première requête sur une
+    nouvelle colonne cassait la console entière.
+    """
+
+    def test_une_colonne_manquante_est_ajoutee_sur_postgres(self, memoire_pg):
+        from sqlalchemy import select, text
+
+        async def scenario():
+            # On recrée l'état d'une installation antérieure : la table existe
+            # mais il lui manque la colonne récente.
+            async with memoire_pg.moteur.begin() as c:
+                await c.execute(text("ALTER TABLE messages DROP COLUMN IF EXISTS media_cle"))
+                await c.execute(text(
+                    "INSERT INTO messages(telephone, role, contenu, auteur, valide_par, cree_le) "
+                    "VALUES('33600000000', 'user', 'Bonjour', 'client', '', now())"))
+
+            await memoire_pg.migrer_colonnes()
+
+            async with memoire_pg.moteur.begin() as c:
+                r = await c.execute(text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='messages'"))
+                colonnes = {x[0] for x in r.fetchall()}
+
+            # La preuve réelle : une requête ORM complète doit passer.
+            async with memoire_pg.Session() as session:
+                messages = list((await session.execute(select(memoire_pg.Message))).scalars())
+
+            return colonnes, messages
+
+        colonnes, messages = executer(memoire_pg, scenario)
+        assert "media_cle" in colonnes, "la migration n'a pas ajouté la colonne"
+        assert len(messages) == 1
+
+    def test_un_fichier_binaire_survit_a_postgres(self, memoire_pg):
+        """Les octets stockés en bytea doivent revenir identiques."""
+        contenu = b"OggS" + bytes(range(256)) * 4
+
+        async def scenario():
+            cle = await memoire_pg.stocker_media(
+                "33600000000", "audio", contenu, "audio/ogg; codecs=opus", "vocal.ogg")
+            return await memoire_pg.lire_media(cle)
+
+        fichier = executer(memoire_pg, scenario)
+        assert fichier.octets == contenu
+        assert fichier.mime == "audio/ogg; codecs=opus"

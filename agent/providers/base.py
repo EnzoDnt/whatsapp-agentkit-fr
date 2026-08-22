@@ -41,6 +41,7 @@ class MessageEntrant:
     legende: str = ""        # caption : porte souvent l'intention réelle
     nom_fichier: str = ""    # documents uniquement
     est_vocal: bool = False  # note vocale (micro) vs fichier audio joint
+    media_cle: str = ""      # clé du fichier une fois conservé, pour la console
 
     @property
     def a_un_media(self) -> bool:

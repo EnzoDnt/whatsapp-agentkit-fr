@@ -612,6 +612,20 @@ def _compter(reponse, modele: str) -> None:
 # Point d'entrée
 # ═════════════════════════════════════════════════════════════════════════
 
+async def _conserver(msg, octets: bytes, mime: str) -> None:
+    """Range le fichier en base et note sa clé sur le message."""
+    from agent.memory import stocker_media
+
+    try:
+        msg.media_cle = await stocker_media(
+            msg.identifiant, msg.type_media, octets, mime, msg.nom_fichier
+        )
+    except Exception as e:  # noqa: BLE001
+        # Ne pas conserver le fichier est regrettable, pas bloquant : la
+        # transcription, elle, doit arriver au client.
+        logger.warning(f"Fichier non conservé pour la console : {e}")
+
+
 CONSIGNE_IMAGE = (
     "Décris cette image pour un conseiller du service client qui ne la voit pas. "
     "Sois factuel et concis. Mentionne tout texte lisible, référence, marque ou "
@@ -662,6 +676,11 @@ async def convertir_en_texte(msg) -> str:
     modele = modele_pour(type_media, fournisseur)
     octets, mime_serveur = await telecharger(msg.media_id, msg.media_url)
     mime = msg.mime_type or mime_serveur
+
+    # Conservé AVANT la conversion, et non après : si la transcription échoue,
+    # l'humain qui reprend la conversation doit tout de même pouvoir écouter le
+    # vocal ou regarder la photo. C'est précisément le cas où il en a besoin.
+    await _conserver(msg, octets, mime)
 
     if type_media == "audio":
         texte = await _transcrire(octets, fournisseur, modele)

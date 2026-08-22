@@ -494,3 +494,99 @@ class TestNonRegression:
 
         medias._compter(FausseReponse(), "claude-sonnet-5")
         assert depenses.depense_du_jour > avant
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Consultation du fichier dans la console
+# ═════════════════════════════════════════════════════════════════════════
+
+
+class TestConsultation:
+    """
+    Le fichier lui-même doit rester consultable : une note vocale réduite à sa
+    transcription perd l'intonation, et l'humain qui reprend la conversation a
+    souvent besoin de l'entendre.
+    """
+
+    async def _poser(self, cle_octets=b"OggS\x00\x00"):
+        from agent.memory import enregistrer_message, stocker_media
+
+        cle = await stocker_media("33600000000", "audio", cle_octets, "audio/ogg")
+        await enregistrer_message(
+            "33600000000", "user", "[note vocale transcrite]\nBonjour", media_cle=cle
+        )
+        return cle
+
+    @pytest.mark.asyncio
+    async def test_le_fichier_apparait_dans_la_conversation(self, connecte, env_propre):
+        cle = await self._poser()
+        d = connecte.get("/admin/conversations/33600000000").json()
+        media = d["messages"][0]["media"]
+        assert media is not None
+        assert media["genre"] == "audio"
+        assert media["cle"] == cle
+
+    @pytest.mark.asyncio
+    async def test_le_fichier_est_servi_avec_son_type(self, connecte, env_propre):
+        cle = await self._poser(b"OggS-contenu-audio")
+        r = connecte.get(f"/admin/fichier/{cle}")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("audio/ogg")
+        assert r.content == b"OggS-contenu-audio"
+        # inline : le navigateur lit au lieu de télécharger.
+        assert "inline" in r.headers.get("content-disposition", "")
+
+    @pytest.mark.asyncio
+    async def test_un_fichier_exige_une_session(self, client, env_propre):
+        """
+        C'est la voix d'une personne, parfois sa photo : aucune URL publique,
+        même difficile à deviner.
+        """
+        cle = await self._poser()
+        from fastapi.testclient import TestClient
+
+        with TestClient(client.app) as anonyme:
+            assert anonyme.get(f"/admin/fichier/{cle}").status_code == 401
+
+    def test_une_reference_invalide_est_refusee(self, connecte, env_propre):
+        for mauvaise in ("../../etc/passwd", "pas-une-cle", "z" * 32):
+            r = connecte.get(f"/admin/fichier/{mauvaise}")
+            assert r.status_code in (400, 404), mauvaise
+
+    @pytest.mark.asyncio
+    async def test_un_message_sans_fichier_n_expose_rien(self, connecte, env_propre):
+        from agent.memory import enregistrer_message
+
+        await enregistrer_message("33600000000", "user", "Bonjour")
+        d = connecte.get("/admin/conversations/33600000000").json()
+        assert d["messages"][0]["media"] is None
+
+    @pytest.mark.asyncio
+    async def test_les_fichiers_sont_purges_avec_les_messages(self, env_propre, monkeypatch):
+        """
+        Conserver la voix d'un client au-delà de son historique n'aurait aucune
+        justification : la purge RGPD doit emporter les deux.
+        """
+        import sys
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import select, update
+
+        memoire = sys.modules["agent.memory"]
+        # Ce test n'ouvre pas l'application : la base doit être créée à la main.
+        await memoire.initialiser_base()
+        cle = await self._poser()
+
+        vieux = datetime.now(timezone.utc) - timedelta(days=400)
+        async with memoire.Session() as session:
+            await session.execute(
+                update(memoire.FichierMedia).values(cree_le=vieux)
+            )
+            await session.execute(update(memoire.Message).values(cree_le=vieux))
+            await session.commit()
+
+        await memoire.purger_donnees_expirees()
+
+        async with memoire.Session() as session:
+            restants = list((await session.execute(select(memoire.FichierMedia))).scalars())
+        assert restants == [], "le fichier a survécu à la purge de son message"

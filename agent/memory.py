@@ -17,6 +17,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Integer,
+    LargeBinary,
     String,
     Text,
     delete,
@@ -68,6 +69,32 @@ class Base(DeclarativeBase):
     pass
 
 
+class FichierMedia(Base):
+    """
+    Le fichier reçu d'un client, conservé pour être consulté dans la console.
+
+    Stocké en base et non sur disque, à dessein : la base est déjà le magasin
+    durable du kit. Un dossier sur le disque du conteneur serait effacé à chaque
+    redéploiement, et imposerait à l'intégrateur de configurer un volume — une
+    étape de plus à rater. Ici, rien à configurer.
+
+    La purge suit la même durée de conservation que les messages : conserver la
+    voix d'un client au-delà de son historique n'aurait aucune justification.
+    """
+
+    __tablename__ = "fichiers_medias"
+
+    cle: Mapped[str] = mapped_column(String(40), primary_key=True)
+    telephone: Mapped[str] = mapped_column(String(32), index=True)
+    type_media: Mapped[str] = mapped_column(String(16))
+    mime: Mapped[str] = mapped_column(String(120), default="")
+    nom_fichier: Mapped[str] = mapped_column(String(200), default="")
+    octets: Mapped[bytes] = mapped_column(LargeBinary)
+    cree_le: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
+    )
+
+
 class Message(Base):
     __tablename__ = "messages"
 
@@ -84,6 +111,9 @@ class Message(Base):
     # lève l'obligation de marquage dès lors qu'un humain endosse la
     # responsabilité éditoriale : c'est ce que trace ce champ.
     valide_par: Mapped[str] = mapped_column(String(200), default="")
+    # Clé du fichier joint, s'il y en a un : permet de réécouter la note vocale
+    # ou de revoir la photo dans la console, sous la transcription.
+    media_cle: Mapped[str] = mapped_column(String(40), default="")
     cree_le: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -357,19 +387,33 @@ async def migrer_colonnes() -> None:
             # rôle, qui lui est fiable.
             "auteur": "VARCHAR(16) DEFAULT ''",
             "valide_par": "VARCHAR(200) DEFAULT ''",
+            "media_cle": "VARCHAR(40) DEFAULT ''",
         },
     }
     rattrapages = [
         "UPDATE messages SET auteur='client' WHERE role='user' AND (auteur IS NULL OR auteur='' OR auteur='agent')",
         "UPDATE messages SET auteur='agent' WHERE role='assistant' AND (auteur IS NULL OR auteur='')",
     ]
+    def _colonnes_existantes(conn_sync, table: str) -> set[str]:
+        """
+        Colonnes actuelles d'une table, quel que soit le moteur.
+
+        On passe par l'inspecteur de SQLAlchemy et non par PRAGMA : PRAGMA
+        n'existe que sous SQLite. L'ancienne version interceptait l'exception et
+        sautait toute la migration sur PostgreSQL — donc en production, où
+        PostgreSQL est justement recommandé, aucune colonne n'était jamais
+        ajoutée, et la première requête sur la nouvelle colonne échouait.
+        """
+        from sqlalchemy import inspect
+
+        inspecteur = inspect(conn_sync)
+        if not inspecteur.has_table(table):
+            return set()
+        return {c["name"] for c in inspecteur.get_columns(table)}
+
     async with moteur.begin() as conn:
         for table, colonnes in ajouts.items():
-            try:
-                res = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
-                existantes = {ligne[1] for ligne in res.fetchall()}
-            except Exception:  # noqa: BLE001 — PostgreSQL n'a pas PRAGMA
-                continue
+            existantes = await conn.run_sync(_colonnes_existantes, table)
             if not existantes:
                 continue
             for nom, definition in colonnes.items():
@@ -479,6 +523,9 @@ async def purger_donnees_expirees() -> int:
     limite = datetime.now(timezone.utc) - timedelta(days=RETENTION_JOURS)
     async with Session() as session:
         r = await session.execute(delete(Message).where(Message.cree_le < limite))
+        # Les fichiers suivent leurs messages : garder la voix d'un client
+        # au-delà de son historique n'aurait aucune justification.
+        await session.execute(delete(FichierMedia).where(FichierMedia.cree_le < limite))
         await session.commit()
     n = r.rowcount or 0
     if n:
@@ -487,7 +534,8 @@ async def purger_donnees_expirees() -> int:
 
 
 async def enregistrer_message(
-    telephone: str, role: str, contenu: str, auteur: str = "", valide_par: str = ""
+    telephone: str, role: str, contenu: str, auteur: str = "", valide_par: str = "",
+    media_cle: str = "",
 ) -> None:
     if not auteur:
         auteur = "client" if role == "user" else "agent"
@@ -499,9 +547,33 @@ async def enregistrer_message(
                 contenu=contenu,
                 auteur=auteur,
                 valide_par=valide_par,
+                media_cle=media_cle,
             )
         )
         await session.commit()
+
+
+async def stocker_media(
+    telephone: str, type_media: str, octets: bytes, mime: str = "", nom_fichier: str = ""
+) -> str:
+    """Conserve le fichier et retourne sa clé, à rattacher au message."""
+    import uuid
+
+    cle = uuid.uuid4().hex
+    async with Session() as session:
+        session.add(
+            FichierMedia(
+                cle=cle, telephone=telephone, type_media=type_media,
+                mime=mime, nom_fichier=nom_fichier, octets=octets,
+            )
+        )
+        await session.commit()
+    return cle
+
+
+async def lire_media(cle: str) -> FichierMedia | None:
+    async with Session() as session:
+        return await session.get(FichierMedia, cle)
 
 
 async def obtenir_historique(telephone: str) -> list[dict]:

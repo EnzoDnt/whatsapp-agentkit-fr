@@ -114,6 +114,19 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .vide{margin:auto;text-align:center;color:var(--discret);padding:var(--e6) var(--e4);
   max-width:38ch;line-height:1.7}
 .vide .gl{font-size:1.75rem;display:block;margin-bottom:var(--e2);opacity:.6}
+/* ── Médias dans le fil ─────────────────────────────────────────── */
+.med-lecteur{display:block;width:100%;max-width:320px;margin-bottom:var(--e2);border-radius:var(--r2)}
+audio.med-lecteur{height:38px}
+video.med-lecteur{max-height:260px;background:#000}
+.med-vignette{display:block;margin-bottom:var(--e2);border-radius:var(--r2);overflow:hidden;
+  max-width:260px;line-height:0}
+.med-vignette img{width:100%;height:auto;max-height:260px;object-fit:cover;display:block;
+  transition:opacity var(--vif)}
+.med-vignette:hover img{opacity:.88}
+.med-doc{display:inline-block;margin-bottom:var(--e2);padding:7px 11px;border-radius:var(--r2);
+  background:var(--creux);text-decoration:none;color:var(--texte);font-size:0.8125rem}
+.med-doc:hover{background:var(--bord)}
+
 /* ── Sous-onglets des réglages ──────────────────────────────────── */
 .sous-onglets{display:flex;gap:2px;padding:0 var(--e3);border-bottom:1px solid var(--bord);
   background:var(--surface);overflow-x:auto}
@@ -464,7 +477,15 @@ async function entrer(e){
     if(m.a_logo)$('#logo').innerHTML='<img src="/admin/logo" alt="">';
   }catch{}
   charger();
-  setInterval(()=>{compterValider();if(vue==='conversations')chargerConv();},7000);
+  // Sondage régulier : la liste ET la conversation ouverte. Auparavant seule
+  // la liste se rafraîchissait, ce qui obligeait à recharger la page pour voir
+  // arriver un nouveau message — pénible quand on suit un échange en direct.
+  setInterval(()=>{
+    compterValider();
+    if(vue!=='conversations')return;
+    chargerConv();
+    rafraichirFil();
+  },5000);
   compterValider();
 }
 function diagnostic(s){
@@ -484,6 +505,18 @@ function diagnostic(s){
       <div class="ptt" style="margin-top:4px">→ ${esc(p.remede)}</div></div>`;
   }).join('');
   box.hidden=false;
+}
+// Rafraîchit le fil ouvert sans rien casser : pas de repeinte si rien n'a
+// changé, pas de saut de défilement, et on n'interrompt pas la lecture d'un
+// média en cours.
+async function rafraichirFil(){
+  if(!conv)return;
+  if($('#fil').querySelector('audio:not([paused]), video:not([paused])'))return;
+  try{
+    const d=await jget('/conversations/'+encodeURIComponent(conv));
+    enPause=d.en_pause;
+    peindreFil(d.messages);
+  }catch(e){/* réseau instable : on réessaiera au prochain tour */}
 }
 async function compterValider(){
   try{const d=await jget('/escalades?statut=en_attente');
@@ -531,6 +564,50 @@ async function chargerConv(){
     </button>`).join('')||`<div class="vide"><span class="gl">📭</span>
       Aucune conversation. Dès qu'un client écrira à votre numéro WhatsApp, elle apparaîtra ici.</div>`;
 }
+// Le fichier lui-même : on l'écoute ou on le regarde, la transcription
+// venant juste en dessous. Sans ça, une note vocale se résume à son texte —
+// or l'intonation d'un client mécontent ne se transcrit pas.
+function lecteurMedia(md){
+  if(!md)return '';
+  const u=esc(md.url);
+  if(md.genre==='audio')
+    return `<audio class="med-lecteur" controls preload="none" src="${u}"></audio>`;
+  if(md.genre==='image')
+    return `<a href="${u}" target="_blank" rel="noopener" class="med-vignette">
+      <img src="${u}" alt="Image envoyée par le client" loading="lazy"></a>`;
+  if(md.genre==='video')
+    return `<video class="med-lecteur" controls preload="metadata" src="${u}"></video>`;
+  return `<a href="${u}" target="_blank" rel="noopener" class="med-doc">📄 Ouvrir le document</a>`;
+}
+
+// Signature du fil : sert à ne repeindre que si le contenu a réellement
+// changé. Repeindre à chaque sondage couperait la lecture d'un vocal en cours
+// et ferait sauter le défilement sous les doigts de l'utilisateur.
+function signature(msgs){
+  return msgs.length+'|'+(msgs.length?msgs[msgs.length-1].date+msgs[msgs.length-1].contenu.length:'');
+}
+let sigFil='';
+
+function peindreFil(msgs,forcer){
+  const sig=signature(msgs);
+  if(!forcer&&sig===sigFil)return;
+  sigFil=sig;
+  const fil=$('#fil');
+  // On ne recolle en bas que si l'utilisateur y était déjà : sinon on le
+  // ramènerait de force alors qu'il relit un échange plus haut.
+  const enBas=fil.scrollHeight-fil.scrollTop-fil.clientHeight<60;
+
+  fil.innerHTML=msgs.map(m=>{
+    const a=m.auteur||'agent';
+    const qui=a==='client'?'Client':a==='humain'?('Vous'+(m.valide_par?' · '+esc(m.valide_par):'')):'Agent';
+    const marque=a==='agent'?'<span class="pastille ac ptt">IA</span>':'';
+    return `<div class="bulle ${a}">${lecteurMedia(m.media)}${esc(m.contenu)}
+      <span class="meta">${marque}<span>${qui}</span><span>·</span><span>${dt(m.date)}</span></span></div>`;
+  }).join('')||'<div class="vide">Conversation vide.</div>';
+
+  if(enBas||forcer)fil.scrollTop=fil.scrollHeight;
+}
+
 async function ouvrir(id){
   conv=id;
   const d=await jget('/conversations/'+encodeURIComponent(id));
@@ -543,14 +620,8 @@ async function ouvrir(id){
   $('#etat-conv').innerHTML=enPause?'<span class="pastille at">agent en pause</span>'
     :'<span class="pastille ok">agent actif</span>';
   $('#btn-pause').textContent=enPause?"Rendre à l'agent":'Reprendre la main';
-  $('#fil').innerHTML=d.messages.map(m=>{
-    const a=m.auteur||'agent';
-    const qui=a==='client'?'Client':a==='humain'?('Vous'+(m.valide_par?' · '+esc(m.valide_par):'')):'Agent';
-    const marque=a==='agent'?'<span class="pastille ac ptt">IA</span>':'';
-    return `<div class="bulle ${a}">${esc(m.contenu)}
-      <span class="meta">${marque}<span>${qui}</span><span>·</span><span>${dt(m.date)}</span></span></div>`;
-  }).join('')||'<div class="vide">Conversation vide.</div>';
-  $('#fil').scrollTop=$('#fil').scrollHeight;
+  sigFil='';                       // nouvelle conversation : on repeint tout
+  peindreFil(d.messages,true);
   if(mobile()){$('#liste-conv').dataset.repli='true';$('#btn-retour').hidden=false;}
   chargerConv();
 }

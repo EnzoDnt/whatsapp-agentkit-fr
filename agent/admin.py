@@ -198,6 +198,38 @@ async def modifier_mot_de_passe(corps: dict, utilisateur=Depends(utilisateur_cou
 # ── Traitement des fichiers reçus ────────────────────────────────────────
 
 
+@routeur.get("/fichier/{cle}", dependencies=[Depends(verifier_jeton)])
+async def servir_fichier(cle: str):
+    """
+    Sert un fichier reçu d'un client, pour l'écouter ou le regarder ici.
+
+    Toujours derrière la session : ce sont des données personnelles — la voix
+    d'une personne, parfois sa photo. Aucune URL publique, même difficile à
+    deviner.
+    """
+    from fastapi.responses import Response
+
+    from agent.memory import lire_media
+
+    if not re.fullmatch(r"[0-9a-f]{32}", cle or ""):
+        raise HTTPException(400, "Référence de fichier invalide")
+
+    fichier = await lire_media(cle)
+    if fichier is None:
+        raise HTTPException(404, "Fichier introuvable ou expiré")
+
+    return Response(
+        content=fichier.octets,
+        media_type=fichier.mime or "application/octet-stream",
+        headers={
+            # inline : le navigateur lit l'audio ou affiche l'image au lieu de
+            # déclencher un téléchargement.
+            "Content-Disposition": f'inline; filename="{fichier.nom_fichier or cle}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
 @routeur.get("/medias", dependencies=[Depends(verifier_jeton)])
 async def lire_medias():
     """
@@ -341,15 +373,36 @@ async def conversation(identifiant: str):
         "en_pause": await est_en_pause(identifiant),
         "messages": [
             {
+                "id": m.id,
                 "role": m.role,
                 "contenu": m.contenu,
                 "auteur": m.auteur or ("client" if m.role == "user" else "agent"),
                 "valide_par": m.valide_par or "",
+                "media": _media_json(m),
                 "date": m.cree_le.isoformat(),
             }
             for m in messages
         ],
     }
+
+
+def _media_json(m) -> dict | None:
+    """Ce qu'il faut à la console pour afficher un lecteur ou une image."""
+    cle = getattr(m, "media_cle", "") or ""
+    if not cle:
+        return None
+    # Le type est déduit du préfixe posé par medias.py : il évite une jointure
+    # sur la table des fichiers pour chaque message affiché.
+    debut = (m.contenu or "")[:40].lower()
+    if "vocal" in debut or "audio" in debut:
+        genre = "audio"
+    elif "vidéo" in debut or "video" in debut:
+        genre = "video"
+    elif "image" in debut or "photo" in debut:
+        genre = "image"
+    else:
+        genre = "document"
+    return {"cle": cle, "genre": genre, "url": f"/admin/fichier/{cle}"}
 
 
 @routeur.post("/conversations/{identifiant}/pause", dependencies=[Depends(verifier_jeton)])
