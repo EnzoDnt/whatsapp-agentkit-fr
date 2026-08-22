@@ -247,12 +247,19 @@ async def pause(identifiant: str, corps: dict):
 
 
 @routeur.post("/conversations/{identifiant}/repondre", dependencies=[Depends(verifier_jeton)])
-async def repondre(identifiant: str, corps: dict, request: Request):
+async def repondre(
+    identifiant: str, corps: dict, request: Request,
+    utilisateur=Depends(utilisateur_courant),
+):
     """
     Envoie un message écrit par un humain, et l'inscrit dans l'historique.
 
-    L'inscrire est important : sans ça, l'agent reprendrait la conversation
-    sans savoir ce que le collègue vient de dire au client.
+    L'inscrire est important à deux titres : sans ça l'agent reprendrait la
+    conversation sans savoir ce que le collègue vient de dire au client, et
+    surtout le message serait attribué à l'IA. Or on doit pouvoir dire de chaque
+    message s'il a été rédigé par une machine ou par une personne — c'est la
+    traçabilité qu'exige l'article 50 de l'AI Act, et c'est aussi la seule façon
+    de savoir qui a répondu quoi dans une équipe.
     """
     texte = (corps.get("texte") or "").strip()
     if not texte:
@@ -266,8 +273,12 @@ async def repondre(identifiant: str, corps: dict, request: Request):
     if not envoye:
         raise HTTPException(502, "Le fournisseur a refusé l'envoi")
 
-    await enregistrer_message(identifiant, "assistant", texte)
-    logger.info(f"Message humain envoyé à {masquer_identifiant(identifiant)}")
+    await enregistrer_message(
+        identifiant, "assistant", texte, auteur="humain", valide_par=utilisateur.email
+    )
+    logger.info(
+        f"Message humain envoyé à {masquer_identifiant(identifiant)} par {utilisateur.email}"
+    )
     return {"statut": "envoye"}
 
 

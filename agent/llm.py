@@ -26,16 +26,23 @@ logger = logging.getLogger("agentkit")
 
 # nom → (base_url, variable d'environnement de la clé, modèle par défaut)
 COMPATIBLES_OPENAI = {
-    "openai": (None, "OPENAI_API_KEY", "gpt-5.1"),
+    # gpt-5.6-terra plutôt que sol : c'est la variante équilibrée, l'équivalent
+    # de Sonnet chez Anthropic. Un agent de service client n'a pas besoin du
+    # modèle le plus capable, il a besoin du bon rapport qualité-prix.
+    "openai": (None, "OPENAI_API_KEY", "gpt-5.6-terra"),
+    # Kimi K3 : bon compromis et disponible sans compte chez l'éditeur.
+    # N'importe quel modèle du catalogue OpenRouter fonctionne à la place.
     "openrouter": (
         "https://openrouter.ai/api/v1",
         "OPENROUTER_API_KEY",
-        "anthropic/claude-sonnet-5",
+        "moonshotai/kimi-k3",
     ),
+    # Flash et non Pro : le moins cher du lot, largement suffisant pour de la
+    # réponse courte adossée à des documents.
     "google": (
         "https://generativelanguage.googleapis.com/v1beta/openai/",
         "GOOGLE_API_KEY",
-        "gemini-2.5-pro",
+        "gemini-3.7-flash",
     ),
 }
 
@@ -48,9 +55,12 @@ TARIFS = {
     "claude-opus-5": (5.0, 25.0),
     "claude-sonnet-5": (3.0, 15.0),
     "claude-haiku-4-5": (1.0, 5.0),
-    "gpt-5.1": (1.25, 10.0),
-    "gemini-2.5-pro": (1.25, 10.0),
-    "gemini-2.5-flash": (0.30, 2.50),
+    "gpt-5.6": (2.0, 12.0),
+    "gpt-5.6-sol": (5.0, 30.0),
+    "gpt-5.6-terra": (2.0, 12.0),
+    "gpt-5.6-luna": (0.50, 4.0),
+    "gemini-3.7-flash": (0.375, 1.875),
+    "kimi-k3": (3.0, 15.0),
 }
 TARIF_PAR_DEFAUT = (3.0, 15.0)
 

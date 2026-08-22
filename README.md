@@ -166,9 +166,24 @@ le prompt ce que vos clients ne demandent jamais.
 ```bash
 make installer    # environnement + dépendances
 make simulateur   # http://localhost:8000/simulateur
-make test         # suite de tests
+make test         # les 176 tests
+make test-pg      # tests sur un vrai PostgreSQL (démarre un conteneur)
 make serveur      # production
 ```
+
+## Ce qui est vérifié
+
+176 tests automatisés, en quatre couches :
+
+| Couche | Ce qu'elle couvre |
+|---|---|
+| Unitaire | Masquage RGPD, hachage des mots de passe, consignes datées, tarifs, schémas d'outils |
+| Intégration | Toute l'API HTTP réelle : authentification, webhook, conversations, escalades, demandes, documents, prompt, marque |
+| Adversarial | Mode production, concurrence, plafond de dépense, pannes du modèle, échec d'envoi, traversée de répertoire, usurpation d'identifiant |
+| PostgreSQL | La couche de données sur un PostgreSQL 17 réel, là où il diverge de SQLite |
+
+Les tests PostgreSQL sont ignorés automatiquement si aucune base n'écoute : le kit
+s'installe sans Docker.
 
 ---
 

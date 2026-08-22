@@ -66,6 +66,11 @@ def _secret_session() -> bytes:
 
 class Utilisateur(Base):
     __tablename__ = "utilisateurs"
+    # La table est déclarée ici mais rattachée au Base de memory.py. Sans
+    # `extend_existing`, un rechargement de ce seul module (rechargement à
+    # chaud, test, import tardif) lève « Table already defined » alors que rien
+    # n'a changé.
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(200), unique=True, index=True)

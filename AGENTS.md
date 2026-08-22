@@ -133,7 +133,8 @@ Pose la question, ne décide pas à sa place : c'est son budget.
 > 2. **OpenAI** — si tu as déjà un compte et des crédits.
 > 3. **OpenRouter** — un seul compte pour accéder à tous les modèles, pratique
 >    pour comparer. Facturation unique.
-> 4. **Google (Gemini)** — souvent le moins cher à qualité comparable.
+> 4. **Google (Gemini)** — de loin le moins cher : environ un huitième du prix
+>    de Claude Sonnet 5 à l'usage.
 >
 > Tu peux changer d'avis plus tard : c'est une ligne dans un fichier.
 
@@ -143,9 +144,9 @@ puis la clé correspondante.
 | Fournisseur | Variable de clé | Modèle par défaut |
 |---|---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
-| `openai` | `OPENAI_API_KEY` | `gpt-5.1` |
-| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-5` |
-| `google` | `GOOGLE_API_KEY` | `gemini-2.5-pro` |
+| `openai` | `OPENAI_API_KEY` | `gpt-5.6-terra` |
+| `openrouter` | `OPENROUTER_API_KEY` | `moonshotai/kimi-k3` |
+| `google` | `GOOGLE_API_KEY` | `gemini-3.7-flash` |
 
 Pour tout ce qui n'est pas Anthropic, installe le paquet nécessaire — ne le lui
 demande pas :
