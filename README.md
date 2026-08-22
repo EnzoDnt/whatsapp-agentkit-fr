@@ -264,12 +264,4 @@ s'installe sans Docker.
 
 ---
 
-## Origine
-
-Dérivé de [Hainrixz/whatsapp-agentkit](https://github.com/Hainrixz/whatsapp-agentkit)
-d'Enrique Rocha (MIT), dont l'architecture webhook et la rigueur des prompts ont
-servi de base. Cette version ajoute le pilotage par agent, le simulateur local,
-le durcissement sécurité/RGPD, l'exécution réelle des outils et la traduction
-française.
-
 Licence MIT.
