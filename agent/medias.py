@@ -482,6 +482,12 @@ async def _transcrire(octets: bytes, fournisseur: str, modele: str) -> str:
         r = await client.audio.transcriptions.create(
             model=modele or "gpt-transcribe", file=(nom, audio, mime)
         )
+        # Le vocal est le média le plus fréquent sur WhatsApp, et OpenAI en est
+        # le fournisseur par défaut : oublier de compter ici laisserait passer
+        # sous le plafond quotidien précisément le chemin le plus emprunté.
+        # Les modèles de transcription qui ne renvoient pas d'usage (whisper-1)
+        # sont ignorés sans bruit par _compter.
+        _compter(r, modele or "gpt-transcribe")
         return (getattr(r, "text", "") or "").strip()
 
     if fournisseur == "google":

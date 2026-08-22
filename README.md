@@ -74,16 +74,55 @@ Il **agit**, il ne fait pas que discuter. Quatre outils réellement exécutés :
 
 ---
 
+## Ce que l'agent reçoit
+
+Sur WhatsApp, un client n'écrit pas toujours. Il envoie un vocal en marchant,
+photographie un devis, transfère un PDF. Un agent qui ne lit que le texte
+**répond à côté ou ne répond pas** — et personne ne le voit, parce qu'il n'y a
+pas d'erreur : juste un silence.
+
+L'agent convertit chaque fichier en texte avant de réfléchir :
+
+| Ce que le client envoie | Ce que l'agent en fait |
+|---|---|
+| Note vocale | Transcription (Ogg/Opus transcodé en WAV par ffmpeg) |
+| Photo | Description de l'image, légende comprise |
+| Vidéo | Analyse image **et** bande son |
+| PDF | Extraction du texte — et **OCR** si le PDF est un scan |
+
+**Chaque type a son propre fournisseur et son propre modèle**, réglables dans le
+back-office. C'est nécessaire, pas décoratif : Claude lit les images et les PDF
+mais **ne sait pas écouter un audio**, et seul Gemini analyse une vidéo
+nativement. Le tableau grise tout seul les cases impossibles et celles dont la
+clé API n'est pas renseignée.
+
+Et si un type n'est pas configuré — ou si la conversion échoue — l'agent
+**n'improvise pas** : il met la conversation en pause et la passe à un humain,
+avec le fichier consultable dans le back-office. Le filet plutôt que le silence.
+
+Détails, limites et coûts : **[SPEC-MEDIAS.md](SPEC-MEDIAS.md)**.
+
+---
+
 ## Back-office minimal
 
 Volontairement réduit à l'essentiel : lire ce que l'agent a répondu, et reprendre
 la main quand il le faut.
 
 - La liste des conversations, la plus récente d'abord
-- L'historique complet de chacune
+- L'historique complet de chacune, **qui se met à jour tout seul** : un message
+  qui arrive apparaît sans recharger la page, et sans interrompre le vocal que
+  vous étiez en train d'écouter
+- Les fichiers reçus **consultables sur place** — le vocal s'écoute, la photo et
+  la vidéo se regardent, avec la transcription juste en dessous
 - **Reprendre la main** : l'agent se tait sur cette conversation, vous répondez
   vous-même — et votre réponse entre dans l'historique, pour que l'agent sache
   ce qui a été dit quand il reprend
+- Le **tableau des fichiers reçus** : quel fournisseur et quel modèle pour le
+  vocal, la photo, la vidéo, le PDF — la liste des modèles est interrogée en
+  direct chez chaque fournisseur, vous choisissez dans ce qui existe vraiment
+- Les messages types (incompréhension, panne technique, quota) modifiables sans
+  toucher au code
 - Effacer une conversation (droit à l'effacement)
 
 Activez-le en définissant `ADMIN_TOKEN` dans `.env`, puis ouvrez `/admin`. Sans
@@ -145,6 +184,7 @@ Ne le transformez pas en assistant généraliste.
 | AgentKit FR | Gratuit, MIT |
 | WhatsApp Cloud API | Les conversations ouvertes par le client sont gratuites |
 | Claude | À l'usage — voir ci-dessous |
+| Conversion des fichiers reçus | À l'usage — quelques millièmes d'euro par fichier |
 | Hébergement | ~5 €/mois (Railway, Fly, VPS) |
 
 Un chatbot ne coûte pas « par message » : à chaque tour, on renvoie à Claude le
@@ -175,6 +215,11 @@ réelle sur WhatsApp, agent avec ses quatre outils et une base de tarifs.
 
 Le meilleur levier n'est pas de changer de modèle : c'est de ne pas mettre dans
 le prompt ce que vos clients ne demandent jamais.
+
+Les fichiers reçus s'ajoutent à cela, mais restent marginaux : un vocal de 30 s
+coûte entre 0,0004 $ et 0,002 $ selon le fournisseur, une photo ~0,007 $. Le
+garde-fou `PLAFOND_DEPENSE_JOUR` compte ces conversions **avec** le reste : une
+photo envoyée en boucle ne peut pas vider votre compte pendant la nuit.
 
 ---
 
