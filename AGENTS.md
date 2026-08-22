@@ -68,6 +68,7 @@ gauche.
 | Vérifier la conformité de l'app | MCP `devtools_compliance` → `status` |
 | Lister les abonnements webhook | MCP `devtools_webhook_list` |
 | **Souscrire le webhook WhatsApp** | MCP `devtools_webhook_manage` → `subscribe` |
+| **Abonner le WABA à l'app** (2ᵉ abonnement, obligatoire) | `POST /{waba_id}/subscribed_apps` |
 | Tester le webhook | MCP `devtools_webhook_test` |
 | Consulter la doc Meta à jour | MCP `devtools_discovery` (aucune permission requise) |
 | Installer Python, créer le venv, installer les dépendances | `uv` / `python3` |

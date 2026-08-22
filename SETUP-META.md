@@ -156,6 +156,34 @@ doit apparaître avec ta `callback_url`.
 > joignable, ou le `verify_token` envoyé ne correspond pas à celui du `.env`.
 > Ce sont les deux seules causes — vérifie-les dans cet ordre.
 
+### 4 bis — Abonner le WABA à l'app ✅ automatique (piège classique)
+
+**Il y a DEUX abonnements, pas un.** Celui du dessus relie ton *app* au webhook.
+Il faut en plus relier ton *compte WhatsApp Business* (WABA) à l'app — sinon
+l'abonnement s'affiche comme actif partout, et **aucun message n'arrive jamais**.
+
+Cette seconde étape n'est pas faisable avec un token d'app : il faut le token
+d'accès de l'étape 2 (permission `whatsapp_business_management`).
+
+```bash
+curl -X POST "https://graph.facebook.com/v25.0/$META_WABA_ID/subscribed_apps" \
+  -H "Authorization: Bearer $META_ACCESS_TOKEN"
+```
+
+**Vérification** :
+
+```bash
+curl -s "https://graph.facebook.com/v25.0/$META_WABA_ID/subscribed_apps" \
+  -H "Authorization: Bearer $META_ACCESS_TOKEN"
+```
+
+Ton app doit apparaître dans `data`. Une liste vide = les messages n'arriveront
+pas, quoi que dise l'abonnement de l'étape 4.
+
+> `(#200) You do not have permission to access this field` sur cet appel signifie
+> que tu utilises un token d'app (`APP_ID|APP_SECRET`) au lieu du token d'accès.
+> Les deux ne sont pas interchangeables.
+
 ---
 
 ## Étape 5 — Numéro destinataire 🔴 manuel
