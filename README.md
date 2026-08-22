@@ -131,14 +131,30 @@ Ne le transformez pas en assistant généraliste.
 | Hébergement | ~5 €/mois (Railway, Fly, VPS) |
 
 Un chatbot ne coûte pas « par message » : à chaque tour, on renvoie à Claude le
-prompt système **plus** tout l'historique. Une conversation de 8 messages avec un
-prompt de ~1 500 tokens consomme environ 16 000 tokens d'entrée et 1 200 de sortie :
+prompt système **plus** tout l'historique. Et quand l'agent utilise ses outils —
+chercher un tarif, vérifier un délai — il faut **deux** appels au lieu d'un : le
+premier pour demander l'outil, le second pour formuler la réponse.
 
-| Modèle | Par conversation | 300/mois | 1 000/mois |
+Les chiffres ci-dessous sont **mesurés en production**, pas estimés : conversation
+réelle sur WhatsApp, agent avec ses quatre outils et une base de tarifs.
+
+| Mesure relevée | Valeur |
+|---|---|
+| Appels à Claude par message client | 2 |
+| Tokens d'entrée par message | ~5 000 |
+| Tokens de sortie par message | ~360 |
+| Coût par message client (Sonnet 5) | **0,020 $** |
+| Latence bout en bout | 7 secondes |
+
+| Modèle | Par conversation (8 messages) | 300/mois | 1 000/mois |
 |---|---|---|---|
-| Claude Opus 5 | ~0,11 $ | ~33 $ | ~110 $ |
-| **Claude Sonnet 5** (défaut) | ~0,07 $ | ~20 $ | ~66 $ |
-| Claude Haiku 4.5 | ~0,02 $ | ~7 $ | ~22 $ |
+| Claude Opus 5 | ~0,27 $ | ~80 $ | ~270 $ |
+| **Claude Sonnet 5** (défaut) | ~0,16 $ | ~49 $ | ~164 $ |
+| Claude Haiku 4.5 | ~0,05 $ | ~16 $ | ~55 $ |
+
+> Beaucoup de kits annoncent la moitié de ces montants — en oubliant que les
+> outils doublent les appels. Si votre agent se contente de répondre sans jamais
+> rien chercher ni vérifier, divisez par deux. Mais alors il invente les prix.
 
 Le meilleur levier n'est pas de changer de modèle : c'est de ne pas mettre dans
 le prompt ce que vos clients ne demandent jamais.
