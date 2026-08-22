@@ -1,0 +1,33 @@
+# Secrets : ne doivent jamais entrer dans une image.
+.env
+.env.*
+!.env.example
+
+# Données locales
+*.db
+*.sqlite*
+donnees/
+
+# Environnements et caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Historique et outillage : inutiles en production, et .git peut contenir des
+# secrets dans des commits anciens.
+.git/
+.gitignore
+tests/
+Makefile
+
+# Documentation : n'a rien à faire dans l'image
+*.md
+!knowledge/*.md
+
+# Système
+.DS_Store
+.vscode/
+.idea/

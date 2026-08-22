@@ -26,6 +26,20 @@ ce stade — une clé API Anthropic.
 
 ---
 
+## Deux dépôts, pas un
+
+Une distinction à avoir en tête dès le départ :
+
+| | **Ce dépôt** | **Le vôtre** |
+|---|---|---|
+| Visibilité | Public, partagé par tous | Privé, créé à la fin |
+| Contenu | Le code et les instructions | Votre code **et votre configuration métier** |
+| Rôle | Ce que vous clonez pour démarrer | Ce que l'hébergeur déploie |
+
+Tant que vous testez, un seul dépôt suffit : celui-ci. Le second n'arrive qu'au
+moment de mettre l'agent en ligne, et **votre agent le crée pour vous** — voir
+[`HEBERGEMENT.md`](HEBERGEMENT.md).
+
 ## Le principe
 
 La plupart des kits vous laissent seul face à la console Meta. Ici, la règle est
@@ -160,6 +174,21 @@ Le meilleur levier n'est pas de changer de modèle : c'est de ne pas mettre dans
 le prompt ce que vos clients ne demandent jamais.
 
 ---
+
+## Mettre en ligne
+
+Tant que l'agent tourne sur votre ordinateur, il s'arrête quand vous le fermez.
+Pour qu'il réponde le dimanche à 22 h, il lui faut un serveur.
+
+Deux voies, décrites dans [`HEBERGEMENT.md`](HEBERGEMENT.md) :
+
+- **Railway** — vous connectez votre dépôt, ça se déploie seul. ~5 $/mois. La voie
+  rapide pour un premier agent.
+- **Coolify sur votre serveur** — ~5 €/mois pour *plusieurs* agents, données en
+  Europe. La voie souveraine, plus exigeante à mettre en place.
+
+Le kit fournit le `Dockerfile` et le `docker-compose.yml` : les deux hébergeurs les
+lisent tels quels.
 
 ## Commandes
 

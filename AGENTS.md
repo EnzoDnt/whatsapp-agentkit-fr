@@ -74,6 +74,10 @@ gauche.
 | Installer Python, créer le venv, installer les dépendances | `uv` / `python3` |
 | Installer le paquet d'un autre fournisseur de modèle | `uv pip install openai` |
 | Poser le logo du client et écrire `config/marque.yaml` | édition de fichier |
+| Créer le dépôt privé de déploiement et le pousser | `gh repo create --private` |
+| Écrire le `.gitignore` du dépôt de déploiement | édition de fichier |
+| Vérifier qu'aucun secret n'est publié | `git ls-files` |
+| Construire et tester l'image Docker | `docker build` |
 | Installer et lancer un tunnel HTTPS public | `brew install cloudflared` puis `cloudflared tunnel --url` |
 | Générer les secrets (verify token, sel de hachage) | `openssl rand -hex 24` |
 | Écrire le `.env` | édition de fichier |
@@ -89,6 +93,8 @@ gauche.
 | Générer le **token d'accès** | Écran Meta, avec confirmation humaine |
 | Ajouter son numéro de test destinataire | Meta exige une vérification par code SMS |
 | Vérification d'entreprise (production seulement) | Contrôle d'identité Meta, 2 à 4 jours |
+| Créer un compte GitHub, Railway, Coolify ou un VPS | Aucune API de création de compte |
+| Saisir les variables d'environnement chez l'hébergeur | Console web, avec ses identifiants |
 
 **Si le MCP Meta n'est pas connecté**, ne bloque pas : avec le token d'accès tu
 peux faire la même chose en `curl` sur la Graph API (`POST /{app_id}/subscriptions`).
@@ -207,13 +213,21 @@ Si l'utilisateur veut pouvoir lire les conversations et reprendre la main :
 génère `ADMIN_TOKEN` (`openssl rand -hex 24`), ajoute-le au `.env`, et indique-lui
 `/admin`. Sans ce jeton, le back-office n'est pas monté du tout.
 
-### Étape 4 — Mise en production (seulement si demandé)
+### Étape 4 — Mise en ligne (seulement si demandé)
 
-Railway ou Docker. `ENVIRONMENT=production` rend la signature **obligatoire** :
-c'est voulu, ne le contourne pas. Bascule sur PostgreSQL — en SQLite l'historique
-est effacé à chaque redéploiement. Explique la fenêtre de 24 h de WhatsApp.
+**Suis `HEBERGEMENT.md`.** Il couvre l'explication à donner à l'utilisateur, la
+création de son dépôt privé, le choix de l'hébergeur et les vérifications d'après
+déploiement.
 
----
+Trois points à ne pas manquer, détaillés là-bas :
+
+- Il y a **deux dépôts** : celui du kit, public et partagé, et le sien, privé,
+  qui contient sa configuration métier. Ne les confonds jamais.
+- Le `.gitignore` du kit exclut `config/` et `knowledge/`. C'est correct pour le
+  dépôt public et **faux pour le sien** : sans ces fichiers, l'agent déployé perd
+  son identité, ses tarifs et ses documents. Tu en écris un autre.
+- `ENVIRONMENT=production` et PostgreSQL sont obligatoires. En SQLite, chaque
+  redéploiement efface tout l'historique.
 
 ## 5. Règles de conduite non négociables
 

@@ -1,0 +1,43 @@
+# Pile complète pour un serveur que vous gérez (Coolify, VPS, machine locale).
+#
+# Coolify sait lire ce fichier tel quel : il crée les deux services, gère le
+# certificat HTTPS et redéploie à chaque push.
+
+services:
+  agent:
+    build: .
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      PORT: 8000
+      ENVIRONMENT: production
+      # Le mot de passe vient du .env : rien de sensible n'est écrit ici.
+      DATABASE_URL: postgresql+asyncpg://agentkit:${POSTGRES_PASSWORD}@base:5432/agentkit
+    depends_on:
+      base:
+        condition: service_healthy
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      # Les documents métier et la configuration vivent hors de l'image : on
+      # peut les modifier depuis la console sans reconstruire quoi que ce soit.
+      - ./knowledge:/app/knowledge
+      - ./config:/app/config
+
+  base:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentkit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: agentkit
+    volumes:
+      - donnees_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentkit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  donnees_postgres:
