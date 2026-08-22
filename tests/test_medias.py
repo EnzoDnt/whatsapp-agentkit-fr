@@ -590,3 +590,74 @@ class TestConsultation:
         async with memoire.Session() as session:
             restants = list((await session.execute(select(memoire.FichierMedia))).scalars())
         assert restants == [], "le fichier a survécu à la purge de son message"
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Rafraîchissement du fil (garde-fous sur le code de la console)
+# ═════════════════════════════════════════════════════════════════════════
+
+
+class TestRafraichissement:
+    """
+    Ces vérifications portent sur le JavaScript de la console.
+
+    Elles existent à cause d'un bug réel : le rafraîchissement était court-
+    circuité par le sélecteur `audio:not([paused])`. Or « paused » est une
+    propriété JavaScript, pas un attribut HTML — `[paused]` ne correspond donc
+    à rien, la condition était vraie pour tout lecteur audio, et la conversation
+    cessait définitivement de se mettre à jour dès qu'une note vocale y figurait.
+    Il fallait recharger la page à la main.
+    """
+
+    @staticmethod
+    def _console() -> str:
+        from pathlib import Path
+
+        return Path("simulateur/admin.html").read_text(encoding="utf-8")
+
+    def test_aucun_selecteur_css_sur_une_propriete_media(self, env_propre):
+        """`[paused]`, `[ended]`, `[muted]` en CSS ne matchent jamais rien."""
+        code = self._console()
+        # On ignore les commentaires, qui documentent justement le piège.
+        actif = "\n".join(
+            l for l in code.splitlines() if not l.strip().startswith("//")
+        )
+        for piege in (":not([paused])", "[paused]", ":not([ended])"):
+            assert piege not in actif, f"sélecteur CSS invalide sur une propriété : {piege}"
+
+    def test_le_fil_se_rafraichit_dans_la_boucle(self, env_propre):
+        code = self._console()
+        assert "rafraichirFil()" in code
+        # Le rafraîchissement doit être dans le sondage, pas seulement défini.
+        boucle = code[code.index("setInterval("):code.index("setInterval(") + 400]
+        assert "rafraichirFil" in boucle, "le fil n'est pas rafraîchi par le sondage"
+
+    def test_le_rendu_est_incremental(self, env_propre):
+        """
+        Réécrire tout le fil à chaque tour couperait la lecture d'un vocal.
+        On n'ajoute que les messages nouveaux.
+        """
+        code = self._console()
+        assert "insertAdjacentHTML" in code, "le fil est repeint au lieu d'être complété"
+        assert "dernierId" in code
+
+    def test_le_sondage_ne_s_empile_pas(self, env_propre):
+        """
+        entrer() peut être rappelé après une session expirée puis reconnexion.
+        Sans garde, chaque passage ajouterait une minuterie : au bout de
+        quelques heures la console interrogerait le serveur plusieurs fois par
+        seconde.
+        """
+        code = self._console()
+        assert "clearInterval" in code, "aucune protection contre l'empilement des minuteries"
+
+    def test_l_identifiant_de_message_est_expose_par_l_api(self, connecte, env_propre):
+        """Le rendu incrémental compare des identifiants : l'API doit les fournir."""
+        import asyncio
+
+        from agent.memory import enregistrer_message
+
+        asyncio.run(enregistrer_message("33600000000", "user", "Bonjour"))
+        d = connecte.get("/admin/conversations/33600000000").json()
+        assert d["messages"], "aucun message"
+        assert isinstance(d["messages"][0].get("id"), int)

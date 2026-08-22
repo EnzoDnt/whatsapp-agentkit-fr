@@ -414,6 +414,7 @@ th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0
 <script>
 'use strict';
 let vue='conversations', conv=null, enPause=false, docNom=null, brouillonId=null;
+let minuterie=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 // Échappe aussi ' et ` : les gabarits n'utilisent aujourd'hui que des attributs
 // entre guillemets doubles, mais un seul attribut écrit entre apostrophes plus
@@ -480,12 +481,17 @@ async function entrer(e){
   // Sondage régulier : la liste ET la conversation ouverte. Auparavant seule
   // la liste se rafraîchissait, ce qui obligeait à recharger la page pour voir
   // arriver un nouveau message — pénible quand on suit un échange en direct.
-  setInterval(()=>{
+  // Un seul sondage, quoi qu'il arrive. entrer() peut être rappelé — après une
+  // session expirée puis une reconnexion, par exemple — et sans cette garde
+  // chaque passage empilerait une minuterie de plus : au bout de quelques
+  // heures, la console interrogerait le serveur plusieurs fois par seconde.
+  if(minuterie)clearInterval(minuterie);
+  minuterie=setInterval(()=>{
     compterValider();
     if(vue!=='conversations')return;
     chargerConv();
     rafraichirFil();
-  },5000);
+  },4000);
   compterValider();
 }
 function diagnostic(s){
@@ -511,7 +517,6 @@ function diagnostic(s){
 // média en cours.
 async function rafraichirFil(){
   if(!conv)return;
-  if($('#fil').querySelector('audio:not([paused]), video:not([paused])'))return;
   try{
     const d=await jget('/conversations/'+encodeURIComponent(conv));
     enPause=d.en_pause;
@@ -583,29 +588,48 @@ function lecteurMedia(md){
 // Signature du fil : sert à ne repeindre que si le contenu a réellement
 // changé. Repeindre à chaque sondage couperait la lecture d'un vocal en cours
 // et ferait sauter le défilement sous les doigts de l'utilisateur.
-function signature(msgs){
-  return msgs.length+'|'+(msgs.length?msgs[msgs.length-1].date+msgs[msgs.length-1].contenu.length:'');
+// Une bulle du fil. Isolée pour pouvoir être ajoutée seule, sans repeindre.
+function bulleHTML(m){
+  const a=m.auteur||'agent';
+  const qui=a==='client'?'Client':a==='humain'?('Vous'+(m.valide_par?' · '+esc(m.valide_par):'')):'Agent';
+  const marque=a==='agent'?'<span class="pastille ac ptt">IA</span>':'';
+  return `<div class="bulle ${a}" data-id="${m.id||0}">${lecteurMedia(m.media)}${esc(m.contenu)}
+    <span class="meta">${marque}<span>${qui}</span><span>·</span><span>${dt(m.date)}</span></span></div>`;
 }
-let sigFil='';
 
+let dernierId=0;
+
+// Rendu INCRÉMENTAL : on n'ajoute que les messages nouveaux.
+//
+// La version précédente réécrivait tout le fil à chaque tour, ce qui coupait
+// net la lecture d'une note vocale. Pour l'éviter, elle sautait le
+// rafraîchissement quand un média jouait — via le sélecteur
+// `audio:not([paused])`. Or « paused » est une PROPRIÉTÉ JavaScript et non un
+// attribut HTML : `[paused]` ne correspond à rien, donc la condition était
+// vraie pour tout lecteur audio et le fil ne se rafraîchissait plus JAMAIS dès
+// qu'une note vocale était présente. En n'ajoutant que le nouveau, le problème
+// disparaît : les lecteurs déjà affichés ne sont pas touchés.
 function peindreFil(msgs,forcer){
-  const sig=signature(msgs);
-  if(!forcer&&sig===sigFil)return;
-  sigFil=sig;
   const fil=$('#fil');
-  // On ne recolle en bas que si l'utilisateur y était déjà : sinon on le
-  // ramènerait de force alors qu'il relit un échange plus haut.
-  const enBas=fil.scrollHeight-fil.scrollTop-fil.clientHeight<60;
+  const vide=!fil.querySelector('.bulle');
 
-  fil.innerHTML=msgs.map(m=>{
-    const a=m.auteur||'agent';
-    const qui=a==='client'?'Client':a==='humain'?('Vous'+(m.valide_par?' · '+esc(m.valide_par):'')):'Agent';
-    const marque=a==='agent'?'<span class="pastille ac ptt">IA</span>':'';
-    return `<div class="bulle ${a}">${lecteurMedia(m.media)}${esc(m.contenu)}
-      <span class="meta">${marque}<span>${qui}</span><span>·</span><span>${dt(m.date)}</span></span></div>`;
-  }).join('')||'<div class="vide">Conversation vide.</div>';
+  if(forcer||vide||fil.dataset.conv!==conv){
+    fil.dataset.conv=conv;
+    fil.innerHTML=msgs.map(bulleHTML).join('')||'<div class="vide">Conversation vide.</div>';
+    dernierId=msgs.length?(msgs[msgs.length-1].id||0):0;
+    fil.scrollTop=fil.scrollHeight;
+    return;
+  }
 
-  if(enBas||forcer)fil.scrollTop=fil.scrollHeight;
+  const nouveaux=msgs.filter(m=>(m.id||0)>dernierId);
+  if(!nouveaux.length)return;
+
+  // On ne recolle en bas que si l'utilisateur y était déjà : sinon on
+  // l'arracherait à un échange qu'il est en train de relire.
+  const enBas=fil.scrollHeight-fil.scrollTop-fil.clientHeight<80;
+  fil.insertAdjacentHTML('beforeend',nouveaux.map(bulleHTML).join(''));
+  dernierId=msgs[msgs.length-1].id||dernierId;
+  if(enBas)fil.scrollTop=fil.scrollHeight;
 }
 
 async function ouvrir(id){
@@ -620,8 +644,7 @@ async function ouvrir(id){
   $('#etat-conv').innerHTML=enPause?'<span class="pastille at">agent en pause</span>'
     :'<span class="pastille ok">agent actif</span>';
   $('#btn-pause').textContent=enPause?"Rendre à l'agent":'Reprendre la main';
-  sigFil='';                       // nouvelle conversation : on repeint tout
-  peindreFil(d.messages,true);
+  peindreFil(d.messages,true);   // nouvelle conversation : repeinte complète
   if(mobile()){$('#liste-conv').dataset.repli='true';$('#btn-retour').hidden=false;}
   chargerConv();
 }
