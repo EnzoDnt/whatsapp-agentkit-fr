@@ -11,6 +11,7 @@ Pour ajouter un outil : écrivez une fonction, décorez-la, c'est tout.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import re
@@ -61,12 +62,15 @@ def outil_accepte(nom: str, parametre: str) -> bool:
     return parametre in (entree[0]["input_schema"].get("properties") or {})
 
 
-def executer_outil(nom: str, arguments: dict) -> str:
+async def executer_outil(nom: str, arguments: dict) -> str:
     """
     Exécute un outil et retourne un résultat textuel pour Claude.
 
+    Accepte indifféremment des fonctions normales et des coroutines : certains
+    outils doivent écrire en base, ce qui est asynchrone.
+
     Toute exception est capturée et renvoyée comme message d'erreur : une
-    exception qui remonterait ferait perdre le tour de conversation au client.
+    exception qui remonterait ferait perdre son tour de conversation au client.
     """
     entree = _REGISTRE.get(nom)
     if entree is None:
@@ -74,6 +78,8 @@ def executer_outil(nom: str, arguments: dict) -> str:
     _, fn = entree
     try:
         resultat = fn(**arguments)
+        if inspect.isawaitable(resultat):
+            resultat = await resultat
     except TypeError as e:
         return f"Erreur d'arguments pour '{nom}' : {e}"
     except Exception as e:  # noqa: BLE001
@@ -203,60 +209,96 @@ def verifier_delai(type_prestation: str, date_souhaitee: str) -> str:
         "additionalProperties": False,
     },
 )
-def enregistrer_demande(
+async def enregistrer_demande(
     nom_client: str, details: str, date_souhaitee: str, telephone: str = ""
 ) -> str:
-    """Écrit la demande sur disque, horodatée, pour reprise par l'équipe."""
-    DOSSIER_DONNEES.mkdir(exist_ok=True)
-    demande: dict[str, Any] = {
-        "nom_client": nom_client,
-        "details": details,
-        "date_souhaitee": date_souhaitee,
-        "telephone": telephone,
-        "recue_le": datetime.now().isoformat(timespec="seconds"),
-        "statut": "a_traiter",
-    }
-    fichier = DOSSIER_DONNEES / f"demande-{datetime.now():%Y%m%d-%H%M%S}.json"
-    fichier.write_text(json.dumps(demande, ensure_ascii=False, indent=2), encoding="utf-8")
-    logger.info(f"Demande enregistrée : {fichier.name}")
+    """Enregistre la demande en base pour qu'elle apparaisse dans le back-office."""
+    from agent.memory import enregistrer_demande_db
+
+    ref = await enregistrer_demande_db(
+        identifiant=telephone,
+        nom_client=nom_client,
+        details=details,
+        date_souhaitee=date_souhaitee,
+    )
+    logger.info(f"Demande #{ref} enregistrée pour {nom_client}")
     return (
-        f"Demande enregistrée sous la référence {fichier.stem}. "
-        "Confirmez au client que l'équipe revient vers lui pour valider."
+        f"Demande enregistrée sous la référence #{ref}. "
+        "Confirme au client que l'équipe revient vers lui pour valider."
     )
 
 
 @outil(
     description=(
-        "Signale qu'un humain doit reprendre la conversation : réclamation, cas "
-        "sensible, ou question hors de votre périmètre."
+        "Passe la main à l'équipe humaine. À utiliser dans quatre cas : (1) le client "
+        "demande explicitement à parler à quelqu'un, (2) il montre de l'agacement ou "
+        "de la colère, (3) il répète la même demande sans que tu parviennes à l'aider, "
+        "(4) il te manque une information que tu n'as pas le droit d'inventer. "
+        "Fournis TOUJOURS une réponse_proposee : l'équipe la validera d'un clic plutôt "
+        "que de tout réécrire. Après cet appel, dis simplement au client que quelqu'un "
+        "de l'équipe revient vers lui — sans promettre de délai."
     ),
     schema={
         "type": "object",
         "properties": {
-            "motif": {"type": "string", "description": "Pourquoi un humain est nécessaire."},
-            "telephone": {"type": "string", "description": "Numéro du client, transmis par le système."},
+            "motif": {
+                "type": "string",
+                "description": "Pourquoi tu passes la main, en une phrase, pour l'équipe.",
+            },
+            "question_equipe": {
+                "type": "string",
+                "description": (
+                    "La question précise que tu poses à l'équipe. Laisse vide si tu "
+                    "n'as besoin de rien et que tu passes la main pour une autre raison."
+                ),
+            },
+            "reponse_proposee": {
+                "type": "string",
+                "description": (
+                    "Le message que tu enverrais au client si tu avais l'information. "
+                    "L'équipe le validera, le corrigera, ou écrira le sien."
+                ),
+            },
+            "urgence": {
+                "type": "string",
+                "enum": ["normale", "haute"],
+                "description": "« haute » si le client est mécontent ou s'il y a urgence.",
+            },
+            "telephone": {"type": "string", "description": "Fourni par le système."},
         },
         "required": ["motif"],
         "additionalProperties": False,
     },
 )
-def transferer_a_humain(motif: str, telephone: str = "") -> str:
-    DOSSIER_DONNEES.mkdir(exist_ok=True)
-    fichier = DOSSIER_DONNEES / f"escalade-{datetime.now():%Y%m%d-%H%M%S}.json"
-    fichier.write_text(
-        json.dumps(
-            {
-                "motif": motif,
-                "telephone": telephone,
-                "signalee_le": datetime.now().isoformat(timespec="seconds"),
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+async def passer_la_main(
+    motif: str,
+    question_equipe: str = "",
+    reponse_proposee: str = "",
+    urgence: str = "normale",
+    telephone: str = "",
+) -> str:
+    """
+    Crée une escalade et met la conversation en attente humaine.
+
+    L'agent se tait ensuite sur cette conversation : c'est le point important.
+    Une escalade qui laisse le robot continuer à répondre par-dessus l'humain
+    est pire que pas d'escalade du tout.
+    """
+    from agent.memory import basculer_pause_conversation, enregistrer_escalade
+
+    ref = await enregistrer_escalade(
+        identifiant=telephone,
+        motif=motif,
+        question_equipe=question_equipe,
+        reponse_proposee=reponse_proposee,
+        urgence=urgence,
     )
-    logger.info(f"Escalade vers un humain : {motif[:60]}")
+    if telephone:
+        await basculer_pause_conversation(telephone, True)
+
+    logger.info(f"Escalade #{ref} ({urgence}) : {motif[:70]}")
     return (
-        "Transfert signalé à l'équipe. Dites au client qu'un membre de l'équipe "
-        "le recontacte, sans promettre de délai précis."
+        f"Escalade #{ref} transmise à l'équipe. Tu ne réponds plus sur cette "
+        "conversation. Dis au client qu'un membre de l'équipe revient vers lui, "
+        "sans annoncer de délai."
     )

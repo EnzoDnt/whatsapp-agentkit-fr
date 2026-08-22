@@ -1,138 +1,660 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Back-office — AgentKit FR</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Console de votre agent</title>
 <style>
-  :root{--fond:#0f1518;--panneau:#161f24;--bord:#243138;--texte:#e9edef;--discret:#8696a0;--accent:#25d366;--alerte:#f0a04b}
-  *{box-sizing:border-box}
-  body{margin:0;height:100vh;display:flex;background:var(--fond);color:var(--texte);
-       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;font-size:14px}
-  aside{width:310px;border-right:1px solid var(--bord);display:flex;flex-direction:column;flex:0 0 auto}
-  aside h1{font-size:14px;margin:0;padding:16px;border-bottom:1px solid var(--bord);letter-spacing:.3px}
-  #liste{overflow-y:auto;flex:1}
-  .conv{padding:12px 16px;border-bottom:1px solid var(--bord);cursor:pointer}
-  .conv:hover{background:var(--panneau)}
-  .conv.actif{background:var(--panneau);border-left:3px solid var(--accent);padding-left:13px}
-  .conv .id{font-weight:600;font-size:13px}
-  .conv .meta{font-size:11.5px;color:var(--discret);margin-top:3px}
-  .puce{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;
-        background:var(--alerte);color:#241a08;font-weight:700;margin-left:6px}
-  main{flex:1;display:flex;flex-direction:column;min-width:0}
-  header{padding:13px 18px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:12px}
-  header .qui{font-weight:600}
-  button{background:var(--panneau);border:1px solid var(--bord);color:var(--texte);
-         border-radius:7px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}
-  button:hover{border-color:var(--discret)}
-  button.primaire{background:var(--accent);color:#04231a;border-color:var(--accent);font-weight:600}
-  #fil{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:9px}
-  .msg{max-width:74%;padding:9px 12px;border-radius:9px;line-height:1.45;white-space:pre-wrap}
-  .user{align-self:flex-start;background:var(--panneau);border:1px solid var(--bord)}
-  .assistant{align-self:flex-end;background:#0c3b30}
-  .date{display:block;font-size:10.5px;color:var(--discret);margin-top:4px}
-  footer{padding:12px 18px;border-top:1px solid var(--bord);display:flex;gap:9px}
-  #texte{flex:1;background:var(--panneau);border:1px solid var(--bord);border-radius:8px;
-         padding:10px 13px;color:var(--texte);font-size:14px;outline:none;font-family:inherit}
-  .vide{margin:auto;color:var(--discret);text-align:center;line-height:1.7}
-  #jeton{margin:auto;display:flex;flex-direction:column;gap:11px;width:330px;text-align:center}
-  #jeton input{background:var(--panneau);border:1px solid var(--bord);border-radius:8px;
-               padding:10px 13px;color:var(--texte);font-size:14px;outline:none;font-family:inherit}
+:root{
+  --fond:oklch(0.975 0.006 75); --surface:oklch(0.995 0.004 75);
+  --creux:oklch(0.955 0.008 75); --bord:oklch(0.90 0.010 75); --bord-fort:oklch(0.84 0.012 72);
+  --texte:oklch(0.245 0.016 60); --discret:oklch(0.53 0.017 65); --tenu:oklch(0.66 0.014 68);
+  --accent:oklch(0.545 0.135 42); --accent-surf:oklch(0.955 0.022 55); --accent-bord:oklch(0.86 0.05 48);
+  --succes:oklch(0.52 0.10 145); --succes-surf:oklch(0.955 0.028 145);
+  --attente:oklch(0.62 0.115 75); --attente-surf:oklch(0.96 0.04 82);
+  --danger:oklch(0.53 0.155 28); --danger-surf:oklch(0.955 0.03 30);
+  --repos:0 1px 2px oklch(0.24 0.02 60/0.05);
+  --flottant:0 8px 24px -6px oklch(0.24 0.02 60/0.14);
+  --r-ctl:8px; --r-pan:12px;
+  --e1:6px; --e2:10px; --e3:14px; --e4:20px; --e5:28px; --e6:40px;
+  --vif:160ms cubic-bezier(0.22,1,0.36,1); --lent:220ms cubic-bezier(0.22,1,0.36,1);
+}
+@media (prefers-color-scheme:dark){:root{
+  --fond:oklch(0.19 0.008 70); --surface:oklch(0.235 0.009 70); --creux:oklch(0.165 0.008 70);
+  --bord:oklch(0.31 0.011 70); --bord-fort:oklch(0.38 0.013 70);
+  --texte:oklch(0.94 0.008 75); --discret:oklch(0.68 0.014 70); --tenu:oklch(0.55 0.012 70);
+  --accent:oklch(0.66 0.125 45); --accent-surf:oklch(0.28 0.038 45); --accent-bord:oklch(0.38 0.06 45);
+  --succes:oklch(0.66 0.10 145); --succes-surf:oklch(0.26 0.035 145);
+  --attente:oklch(0.75 0.11 78); --attente-surf:oklch(0.28 0.04 78);
+  --danger:oklch(0.66 0.14 30); --danger-surf:oklch(0.28 0.05 30);
+  --repos:0 1px 2px oklch(0.1 0 0/0.4); --flottant:0 8px 24px -6px oklch(0.1 0 0/0.55);
+}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;display:flex;background:var(--fond);color:var(--texte);
+  font:1rem/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+h1{font-size:1.375rem;margin:0;font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.125rem;margin:0;font-weight:600;letter-spacing:-.005em}
+h3{font-size:0.875rem;margin:0;font-weight:600}
+.pt{font-size:0.8125rem}.ptt{font-size:0.75rem}
+.dis{color:var(--discret)}.ten{color:var(--tenu)}
+button{font:inherit;font-weight:500;cursor:pointer;border-radius:var(--r-ctl);
+  border:1px solid var(--bord-fort);background:var(--surface);color:var(--texte);
+  padding:8px 14px;transition:background var(--vif),border-color var(--vif),color var(--vif);
+  min-height:38px;display:inline-flex;align-items:center;gap:7px;justify-content:center}
+button:hover:not(:disabled){background:var(--creux)}
+button:active:not(:disabled){background:var(--bord)}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.p{background:var(--accent);border-color:var(--accent);color:oklch(0.99 0.005 60);font-weight:600}
+button.p:hover:not(:disabled){filter:brightness(1.07)}
+button.q{border-color:transparent;background:transparent;color:var(--discret)}
+button.q:hover:not(:disabled){background:var(--creux);color:var(--texte)}
+button.dg{border-color:transparent;background:transparent;color:var(--danger)}
+button.dg:hover:not(:disabled){background:var(--danger-surf)}
+input,textarea,select{font:inherit;width:100%;background:var(--surface);color:var(--texte);
+  border:1px solid var(--bord-fort);border-radius:var(--r-ctl);padding:10px 12px;outline:none;
+  transition:border-color var(--vif)}
+input:hover,textarea:hover,select:hover{border-color:var(--discret)}
+textarea{resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:0.8125rem;line-height:1.65}
+label{display:block;font-size:0.75rem;font-weight:600;color:var(--discret);
+  margin-bottom:var(--e1);letter-spacing:.01em}
+.pastille{display:inline-flex;align-items:center;gap:5px;font-size:0.75rem;font-weight:600;
+  padding:3px 9px;border-radius:999px;background:var(--creux);color:var(--discret);white-space:nowrap}
+.pastille.ok{background:var(--succes-surf);color:var(--succes)}
+.pastille.at{background:var(--attente-surf);color:var(--attente)}
+.pastille.dg{background:var(--danger-surf);color:var(--danger)}
+.pastille.ac{background:var(--accent-surf);color:var(--accent)}
+.av{width:38px;height:38px;flex:0 0 auto;border-radius:999px;background:var(--accent-surf);
+  color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:0.8125rem;
+  border:1px solid var(--accent-bord)}
+.av.g{width:52px;height:52px;font-size:1.125rem}
+/* ── Accès ── */
+#acces{margin:auto;width:min(400px,calc(100vw - 40px));display:flex;flex-direction:column;
+  gap:var(--e3);padding:var(--e6) 0}
+#acces .marque{text-align:center;margin-bottom:var(--e2)}
+#acces .glyphe{width:46px;height:46px;margin:0 auto var(--e3);border-radius:12px;
+  background:var(--accent-surf);border:1px solid var(--accent-bord);display:grid;place-items:center;font-size:1.375rem}
+.avis{padding:11px 13px;border-radius:var(--r-ctl);font-size:0.8125rem;line-height:1.55}
+.avis.dg{background:var(--danger-surf);color:var(--danger)}
+.avis.at{background:var(--attente-surf);color:var(--attente)}
+.avis.ac{background:var(--accent-surf);color:var(--accent)}
+/* ── Coquille ── */
+nav{width:232px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--bord);
+  display:flex;flex-direction:column;padding:var(--e3) var(--e2)}
+nav .entete{padding:var(--e2) var(--e2) var(--e4);display:flex;align-items:center;gap:10px}
+nav .logo{width:32px;height:32px;border-radius:8px;background:var(--accent-surf);
+  border:1px solid var(--accent-bord);display:grid;place-items:center;font-size:1rem;flex:0 0 auto;
+  overflow:hidden}
+nav .logo img{width:100%;height:100%;object-fit:cover}
+nav a{padding:9px 11px;border-radius:var(--r-ctl);color:var(--discret);text-decoration:none;
+  display:flex;align-items:center;gap:10px;font-size:0.875rem;font-weight:500;
+  transition:background var(--vif),color var(--vif);position:relative}
+nav a:hover{background:var(--creux);color:var(--texte)}
+nav a[aria-current=page]{background:var(--accent-surf);color:var(--accent);font-weight:600}
+nav a .n{margin-left:auto;font-size:0.6875rem;font-weight:700;background:var(--accent);
+  color:oklch(0.99 0.005 60);border-radius:999px;padding:1px 6px;min-width:18px;text-align:center}
+nav .pied{margin-top:auto;padding:var(--e3) var(--e2) var(--e1);border-top:1px solid var(--bord);
+  font-size:0.6875rem;color:var(--tenu);line-height:1.6}
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+.barre{padding:var(--e3) var(--e4);border-bottom:1px solid var(--bord);display:flex;
+  align-items:center;gap:var(--e3);background:var(--surface);flex:0 0 auto;min-height:62px}
+.outils{margin-left:auto;display:flex;gap:var(--e2);align-items:center}
+.corps{flex:1;overflow:auto;padding:var(--e4);-webkit-overflow-scrolling:touch}
+.vue{display:none;flex:1;min-height:0;flex-direction:column}
+.vue[aria-hidden=false]{display:flex}
+.panneau{background:var(--surface);border:1px solid var(--bord);border-radius:var(--r-pan);
+  box-shadow:var(--repos);overflow:hidden}
+.vide{margin:auto;text-align:center;color:var(--discret);padding:var(--e6) var(--e4);
+  max-width:38ch;line-height:1.7}
+.vide .gl{font-size:1.75rem;display:block;margin-bottom:var(--e2);opacity:.6}
+/* ── Conversations ── */
+.duo{display:flex;flex:1;min-height:0}
+.colonne{width:296px;flex:0 0 auto;overflow-y:auto;border-right:1px solid var(--bord);background:var(--surface)}
+.rangee{padding:var(--e3) var(--e3);border-bottom:1px solid var(--bord);cursor:pointer;
+  display:flex;gap:var(--e2);align-items:flex-start;transition:background var(--vif);width:100%;
+  text-align:left;border-radius:0;border-left:none;border-right:none;border-top:none;min-height:0}
+.rangee:hover{background:var(--creux)}
+.rangee[aria-selected=true]{background:var(--accent-surf)}
+.rangee .txt{flex:1;min-width:0}
+.rangee .nom{font-weight:600;font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail{flex:1;display:flex;flex-direction:column;min-width:0}
+#fil{flex:1;overflow-y:auto;padding:var(--e4);display:flex;flex-direction:column;gap:var(--e2)}
+.bulle{max-width:min(72%,62ch);padding:10px 13px;border-radius:var(--r-pan);white-space:pre-wrap;
+  word-wrap:break-word;font-size:0.875rem;line-height:1.55}
+.bulle.client{align-self:flex-start;background:var(--surface);border:1px solid var(--bord)}
+.bulle.agent{align-self:flex-end;background:var(--accent-surf);border:1px solid var(--accent-bord)}
+.bulle.humain{align-self:flex-end;background:var(--succes-surf);border:1px solid transparent}
+.bulle .meta{display:flex;gap:6px;align-items:center;font-size:0.6875rem;color:var(--tenu);
+  margin-top:var(--e1);flex-wrap:wrap}
+.saisie{padding:var(--e3) var(--e4);border-top:1px solid var(--bord);display:flex;gap:var(--e2);
+  background:var(--surface);align-items:flex-end}
+/* ── Listes ── */
+.entree{padding:var(--e3) var(--e4);border-bottom:1px solid var(--bord);display:flex;
+  gap:var(--e3);align-items:flex-start}
+.entree:last-child{border-bottom:none}
+.entree .principal{flex:1;min-width:0}
+.actions{display:flex;gap:var(--e1);flex:0 0 auto;flex-wrap:wrap}
+.duo-champs{display:grid;gap:var(--e3);grid-template-columns:1fr 1fr}
+.squelette{background:linear-gradient(90deg,var(--creux) 25%,var(--bord) 50%,var(--creux) 75%);
+  background-size:200% 100%;animation:glisse 1.4s infinite;border-radius:6px;height:12px}
+@keyframes glisse{to{background-position:-200% 0}}
+/* ── Feuille modale ── */
+.feuille{position:fixed;inset:0;background:oklch(0.2 0.01 60/0.45);display:none;
+  align-items:center;justify-content:center;padding:var(--e4);z-index:20}
+.feuille[aria-hidden=false]{display:flex}
+.feuille .boite{background:var(--surface);border-radius:var(--r-pan);padding:var(--e4);
+  width:min(640px,100%);max-height:88vh;overflow:auto;display:flex;flex-direction:column;
+  gap:var(--e3);box-shadow:var(--flottant)}
+.brouillon{white-space:pre-wrap;font-size:0.875rem;line-height:1.6;background:var(--creux);
+  padding:var(--e3);border-radius:var(--r-ctl);margin:0}
+/* ── Mobile ── */
+@media (max-width:900px){
+  body{flex-direction:column}
+  nav{width:100%;flex-direction:row;border-right:none;border-top:1px solid var(--bord);
+    order:2;padding:0;overflow-x:auto;background:var(--surface);
+    padding-bottom:env(safe-area-inset-bottom)}
+  nav .entete,nav .pied{display:none}
+  nav a{flex-direction:column;gap:3px;font-size:0.6875rem;padding:9px 6px;min-width:64px;
+    flex:1;justify-content:center;min-height:52px;border-radius:0}
+  nav a .n{position:absolute;top:4px;right:calc(50% - 20px);margin:0}
+  main{order:1;min-height:0}
+  .duo{flex-direction:column}
+  .colonne{width:100%;border-right:none;max-height:none;
+    border-bottom:1px solid var(--bord);flex:0 0 auto}
+  .colonne[data-repli=true]{display:none}
+  .bulle{max-width:88%}
+  .barre{padding:var(--e2) var(--e3);min-height:56px}
+  .corps{padding:var(--e3)}
+  .duo-champs{grid-template-columns:1fr}
+  button{min-height:44px}
+}
 </style>
 </head>
 <body>
-<div id="connexion" style="display:flex;width:100%">
-  <div id="jeton">
-    <h1 style="font-size:16px;margin:0">Back-office AgentKit</h1>
-    <p style="color:var(--discret);margin:0;font-size:13px">Entrez la valeur d'<code>ADMIN_TOKEN</code> de votre <code>.env</code>.</p>
-    <input id="champ-jeton" type="password" placeholder="Jeton d'administration" autocomplete="off">
-    <button class="primaire" onclick="connecter()">Ouvrir</button>
-    <p id="err" style="color:#e77;font-size:12.5px;margin:0;min-height:16px"></p>
+
+<div id="acces">
+  <div class="marque">
+    <div class="glyphe">◗</div>
+    <h1 id="acces-titre">Console de votre agent</h1>
+    <p class="dis pt" id="acces-sous" style="margin:var(--e1) 0 0">Connectez-vous pour continuer.</p>
   </div>
+  <div id="acces-champs"></div>
+  <p id="acces-avis" role="alert" aria-live="polite"></p>
 </div>
 
-<aside style="display:none"><h1>Conversations</h1><div id="liste"></div></aside>
-<main style="display:none">
-  <header>
-    <span class="qui" id="qui">—</span>
-    <span id="etat-pause" style="color:var(--discret);font-size:12px"></span>
-    <span style="margin-left:auto;display:flex;gap:8px">
-      <button id="btn-pause" onclick="basculerPause()">Reprendre la main</button>
-      <button onclick="effacer()" title="Droit à l'effacement (RGPD)">Effacer</button>
-    </span>
-  </header>
-  <div id="fil"><div class="vide">Choisissez une conversation à gauche.</div></div>
-  <footer>
-    <input id="texte" placeholder="Répondre en tant qu'humain…" autocomplete="off">
-    <button class="primaire" onclick="repondre()">Envoyer</button>
-  </footer>
+<nav hidden aria-label="Sections">
+  <div class="entete"><div class="logo" id="logo">◗</div>
+    <div style="min-width:0"><div style="font-weight:600;font-size:0.875rem;overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap" id="nom-espace">Votre agent</div>
+      <div class="ptt ten" id="etat-agent">—</div></div></div>
+  <a href="#" data-vue="conversations" aria-current="page">💬 Conversations</a>
+  <a href="#" data-vue="valider">✅ À valider <span class="n" id="n-valider" hidden>0</span></a>
+  <a href="#" data-vue="demandes">📋 Demandes</a>
+  <a href="#" data-vue="consignes">📌 Consignes</a>
+  <a href="#" data-vue="documents">📁 Documents</a>
+  <a href="#" data-vue="reglages">⚙️ Réglages</a>
+  <div class="pied">
+    <div id="qui">—</div>
+    <button class="q ptt" data-act="deconnexion" style="padding:4px 0;min-height:0;margin-top:4px">Se déconnecter</button>
+    <div style="margin-top:var(--e2)">Propulsé par ZénithIA</div>
+  </div>
+</nav>
+
+<main hidden>
+  <!-- CONVERSATIONS -->
+  <section class="vue" aria-hidden="false" id="v-conversations">
+    <div class="duo">
+      <div class="colonne" id="liste-conv"></div>
+      <div class="detail">
+        <div class="barre" id="tete-conv" hidden>
+          <button class="q" data-act="retour" id="btn-retour" hidden style="padding:6px 8px">←</button>
+          <div class="av" id="av-conv">?</div>
+          <div style="min-width:0">
+            <div style="font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span id="nom-conv">—</span><span id="etat-conv"></span></div>
+            <div class="ptt dis" id="tel-conv"></div>
+          </div>
+          <div class="outils">
+            <button data-act="fiche" title="Fiche client">Fiche</button>
+            <button data-act="pause" id="btn-pause"></button>
+          </div>
+        </div>
+        <div id="fil"><div class="vide"><span class="gl">💬</span>
+          Choisissez une conversation à gauche pour lire l'échange et reprendre la main si besoin.</div></div>
+        <div class="saisie" id="zone-saisie" hidden>
+          <input id="msg" placeholder="Répondre vous-même…" aria-label="Votre réponse">
+          <button class="p" data-act="repondre">Envoyer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- À VALIDER -->
+  <section class="vue" aria-hidden="true" id="v-valider">
+    <div class="barre"><h2>À valider</h2><span class="pt dis" id="cpt-valider"></span></div>
+    <div class="corps">
+      <p class="dis pt" style="margin:0 0 var(--e3);max-width:66ch">
+        Quand l'agent préfère ne pas répondre seul, il passe la main et propose un brouillon.
+        Vous validez, corrigez, ou écrivez le vôtre.</p>
+      <div class="panneau" id="liste-valider"></div>
+    </div>
+  </section>
+
+  <!-- DEMANDES -->
+  <section class="vue" aria-hidden="true" id="v-demandes">
+    <div class="barre"><h2>Demandes</h2>
+      <div class="outils"><select id="filtre-dem" style="width:auto" aria-label="Filtrer">
+        <option value="">Toutes</option><option value="a_traiter">À traiter</option>
+        <option value="traitee">Traitées</option><option value="annulee">Annulées</option>
+      </select></div>
+    </div>
+    <div class="corps"><div class="panneau" id="liste-dem"></div></div>
+  </section>
+
+  <!-- CONSIGNES -->
+  <section class="vue" aria-hidden="true" id="v-consignes">
+    <div class="barre"><h2>Consignes</h2>
+      <div class="outils"><button class="p" data-act="new-consigne">+ Consigne</button></div></div>
+    <div class="corps">
+      <p class="dis pt" style="margin:0 0 var(--e3);max-width:66ch">
+        Des instructions ponctuelles, comme le mot laissé à un employé le matin. L'agent ne les
+        applique que pendant leur période de validité : inutile de penser à les retirer.</p>
+      <div class="panneau" id="liste-cons"></div>
+    </div>
+  </section>
+
+  <!-- DOCUMENTS -->
+  <section class="vue" aria-hidden="true" id="v-documents">
+    <div class="barre"><h2>Documents</h2>
+      <div class="outils"><button class="p" data-act="new-doc">+ Document</button></div></div>
+    <div class="corps">
+      <p class="dis pt" style="margin:0 0 var(--e3);max-width:66ch">
+        Tarifs, catalogue, allergènes, conditions. L'agent y cherche avant de répondre et ne cite
+        jamais un chiffre qui n'y figure pas.</p>
+      <div class="panneau" id="liste-doc"></div>
+    </div>
+  </section>
+
+  <!-- RÉGLAGES -->
+  <section class="vue" aria-hidden="true" id="v-reglages">
+    <div class="barre"><h2>Comportement de l'agent</h2>
+      <div class="outils"><button class="p" data-act="save-prompt">Enregistrer</button></div></div>
+    <div class="corps" style="max-width:78ch">
+      <p class="dis pt" style="margin:0 0 var(--e3)">
+        Qui est votre agent, ce qu'il sait faire, comment il s'exprime. Une sauvegarde est
+        conservée à chaque enregistrement.</p>
+      <label for="sys">Instructions principales</label>
+      <textarea id="sys" rows="20"></textarea>
+      <div class="duo-champs" style="margin-top:var(--e3)">
+        <div><label for="m-fb">Quand il n'a pas compris</label><input id="m-fb"></div>
+        <div><label for="m-er">En cas de panne technique</label><input id="m-er"></div>
+      </div>
+      <div style="margin-top:var(--e3)"><label for="m-qu">Limite quotidienne atteinte</label>
+        <input id="m-qu"></div>
+    </div>
+  </section>
 </main>
 
+<div class="feuille" id="feuille" aria-hidden="true" role="dialog" aria-modal="true"><div class="boite" id="feuille-corps"></div></div>
+
 <script>
-let JETON = '', courant = null, enPause = false;
-const $ = s => document.querySelector(s);
-const api = (chemin, options = {}) => fetch('/admin' + chemin, {
-  ...options, headers: {'X-Admin-Token': JETON, 'Content-Type': 'application/json', ...(options.headers||{})}
-});
+'use strict';
+let vue='conversations', conv=null, enPause=false, docNom=null, brouillonId=null;
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=t=>String(t??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const dt=s=>s?new Date(s).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+const mobile=()=>window.matchMedia('(max-width:900px)').matches;
+const api=(p,o={})=>fetch('/admin'+p,{...o,credentials:'same-origin',
+  headers:{'Content-Type':'application/json',...(o.headers||{})}});
+async function jget(p){const r=await api(p);
+  if(r.status===401){demarrer();throw new Error('session');}
+  if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||('Erreur '+r.status));
+  return r.json();}
+function feuille(html){$('#feuille-corps').innerHTML=html;$('#feuille').setAttribute('aria-hidden','false');
+  const f=$('#feuille-corps').querySelector('input,textarea');if(f)f.focus();}
+const fermer=()=>$('#feuille').setAttribute('aria-hidden','true');
+const avis=(el,txt,genre='dg')=>{el.innerHTML=txt?`<div class="avis ${genre}">${esc(txt)}</div>`:'';};
 
-async function connecter(){
-  JETON = $('#champ-jeton').value.trim();
-  const r = await api('/conversations');
-  if(!r.ok){ $('#err').textContent = 'Jeton refusé.'; return; }
-  $('#connexion').style.display = 'none';
-  document.querySelector('aside').style.display = 'flex';
-  document.querySelector('main').style.display = 'flex';
-  charger(); setInterval(charger, 5000);
+// ── Accès ───────────────────────────────────────────────────────────────
+async function demarrer(){
+  $('nav').hidden=true;$('main').hidden=true;$('#acces').hidden=false;
+  const e=await (await api('/session')).json();
+  if(e.etat==='connecte'){entrer(e);return;}
+  if(e.etat==='amorcage_requis'){
+    $('#acces-titre').textContent='Créons votre compte';
+    $('#acces-sous').textContent="Premier démarrage. Le jeton d'installation se trouve dans votre fichier .env (ADMIN_TOKEN).";
+    $('#acces-champs').innerHTML=`
+      <div style="display:flex;flex-direction:column;gap:var(--e3)">
+        <div><label for="a-nom">Votre nom</label><input id="a-nom" autocomplete="name"></div>
+        <div><label for="a-mail">Adresse e-mail</label><input id="a-mail" type="email" autocomplete="username"></div>
+        <div><label for="a-mdp">Mot de passe (10 caractères minimum)</label>
+          <input id="a-mdp" type="password" autocomplete="new-password"></div>
+        <div><label for="a-jeton">Jeton d'installation</label><input id="a-jeton" type="password"></div>
+        <button class="p" data-act="amorcer">Créer le compte</button>
+      </div>`;
+  } else {
+    $('#acces-titre').textContent='Console de votre agent';
+    $('#acces-sous').textContent='Connectez-vous pour continuer.';
+    $('#acces-champs').innerHTML=`
+      <div style="display:flex;flex-direction:column;gap:var(--e3)">
+        <div><label for="a-mail">Adresse e-mail</label><input id="a-mail" type="email" autocomplete="username"></div>
+        <div><label for="a-mdp">Mot de passe</label><input id="a-mdp" type="password" autocomplete="current-password"></div>
+        <button class="p" data-act="connexion">Se connecter</button>
+      </div>`;
+  }
+  const p=$('#acces-champs').querySelector('input');if(p)p.focus();
+}
+async function entrer(e){
+  $('#acces').hidden=true;$('nav').hidden=false;$('main').hidden=false;
+  $('#qui').textContent=e.nom||e.email||'';
+  try{const s=await (await fetch('/')).json();
+    $('#etat-agent').textContent=s.statut==='ok'?'en ligne':s.statut;
+    $('#nom-espace').textContent=s.fournisseur==='meta'?'WhatsApp connecté':'Simulateur local';
+  }catch{}
+  charger();
+  setInterval(()=>{compterValider();if(vue==='conversations')chargerConv();},7000);
+  compterValider();
+}
+async function compterValider(){
+  try{const d=await jget('/escalades?statut=en_attente');
+    const n=d.escalades.length,b=$('#n-valider');
+    b.hidden=n===0;b.textContent=n;}catch{}
 }
 
-async function charger(){
-  const r = await api('/conversations'); if(!r.ok) return;
-  const d = await r.json();
-  $('#liste').innerHTML = d.conversations.map(c => `
-    <div class="conv ${c.identifiant===courant?'actif':''}" onclick="ouvrir(${JSON.stringify(c.identifiant)})">
-      <div class="id">${c.affichage}${c.en_pause?'<span class="puce">HUMAIN</span>':''}</div>
-      <div class="meta">${c.messages} messages · ${c.dernier ? new Date(c.dernier).toLocaleString('fr-FR') : ''}</div>
-    </div>`).join('') || '<div class="vide" style="padding:24px">Aucune conversation.</div>';
-}
-
-async function ouvrir(id){
-  courant = id;
-  const r = await api('/conversations/' + encodeURIComponent(id)); if(!r.ok) return;
-  const d = await r.json();
-  enPause = d.en_pause;
-  $('#qui').textContent = d.affichage;
-  $('#etat-pause').textContent = enPause ? '· agent en pause' : '· agent actif';
-  $('#btn-pause').textContent = enPause ? "Rendre la main à l'agent" : 'Reprendre la main';
-  $('#fil').innerHTML = d.messages.map(m => `
-    <div class="msg ${m.role}">${m.contenu.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}
-      <span class="date">${m.role==='user'?'Client':'Agent / équipe'} · ${new Date(m.date).toLocaleString('fr-FR')}</span>
-    </div>`).join('') || '<div class="vide">Conversation vide.</div>';
-  $('#fil').scrollTop = $('#fil').scrollHeight;
+// ── Navigation ──────────────────────────────────────────────────────────
+function aller(v){
+  vue=v;
+  $$('nav a').forEach(a=>a.setAttribute('aria-current',a.dataset.vue===v?'page':'false'));
+  $$('.vue').forEach(s=>s.setAttribute('aria-hidden',s.id!=='v-'+v));
   charger();
 }
+function charger(){({conversations:chargerConv,valider:chargerValider,demandes:chargerDem,
+  consignes:chargerCons,documents:chargerDoc,reglages:chargerPrompt})[vue]();}
 
-async function basculerPause(){
-  if(!courant) return;
-  await api(`/conversations/${encodeURIComponent(courant)}/pause`, {
-    method:'POST', body: JSON.stringify({en_pause: !enPause})});
-  ouvrir(courant);
+// ── Conversations ───────────────────────────────────────────────────────
+async function chargerConv(){
+  const d=await jget('/conversations');
+  $('#liste-conv').innerHTML=d.conversations.map(c=>`
+    <button class="rangee" data-conv="${esc(c.identifiant)}" aria-selected="${c.identifiant===conv}">
+      <span class="av">${esc(c.initiales||'?')}</span>
+      <span class="txt">
+        <span class="nom">${esc(c.nom||c.affichage)}</span>
+        <span class="ptt dis" style="display:block;margin-top:2px">${c.messages} messages · ${dt(c.dernier)}</span>
+      </span>
+      ${c.attend_reponse?'<span class="pastille at">à valider</span>':c.en_pause?'<span class="pastille">humain</span>':''}
+    </button>`).join('')||`<div class="vide"><span class="gl">📭</span>
+      Aucune conversation. Dès qu'un client écrira à votre numéro WhatsApp, elle apparaîtra ici.</div>`;
+}
+async function ouvrir(id){
+  conv=id;
+  const d=await jget('/conversations/'+encodeURIComponent(id));
+  enPause=d.en_pause;const c=d.contact;
+  $('#tete-conv').hidden=false;$('#zone-saisie').hidden=false;
+  $('#av-conv').textContent=c.initiales||'?';
+  $('#nom-conv').textContent=c.nom||d.affichage;
+  $('#tel-conv').textContent=[c.identifiant.length>20?'identifiant masqué':'+'+c.identifiant,
+    c.username,c.pays].filter(Boolean).join(' · ');
+  $('#etat-conv').innerHTML=enPause?'<span class="pastille at">agent en pause</span>'
+    :'<span class="pastille ok">agent actif</span>';
+  $('#btn-pause').textContent=enPause?"Rendre à l'agent":'Reprendre la main';
+  $('#fil').innerHTML=d.messages.map(m=>{
+    const a=m.auteur||'agent';
+    const qui=a==='client'?'Client':a==='humain'?('Vous'+(m.valide_par?' · '+esc(m.valide_par):'')):'Agent';
+    const marque=a==='agent'?'<span class="pastille ac ptt">IA</span>':'';
+    return `<div class="bulle ${a}">${esc(m.contenu)}
+      <span class="meta">${marque}<span>${qui}</span><span>·</span><span>${dt(m.date)}</span></span></div>`;
+  }).join('')||'<div class="vide">Conversation vide.</div>';
+  $('#fil').scrollTop=$('#fil').scrollHeight;
+  if(mobile()){$('#liste-conv').dataset.repli='true';$('#btn-retour').hidden=false;}
+  chargerConv();
+}
+async function fiche(){
+  if(!conv)return;
+  const c=await jget('/contacts/'+encodeURIComponent(conv));
+  feuille(`<h2>Fiche client</h2>
+    <div style="display:flex;gap:var(--e3);align-items:center">
+      <div class="av g">${esc(c.initiales)}</div>
+      <div><div style="font-weight:600">${esc(c.nom||'Sans nom')}</div>
+        <div class="pt dis">${esc(c.identifiant.length>20?'identifiant WhatsApp masqué':'+'+c.identifiant)}
+        ${c.username?' · '+esc(c.username):''}${c.pays?' · '+esc(c.pays):''}</div></div></div>
+    <div><label for="f-nom">Nom (le vôtre prime sur celui de WhatsApp)</label>
+      <input id="f-nom" value="${esc(c.nom_affiche)}" placeholder="${esc(c.nom_whatsapp||'Nom du client')}"></div>
+    <div><label for="f-notes">Notes internes</label>
+      <textarea id="f-notes" rows="5" placeholder="Préférences, historique, points d'attention…">${esc(c.notes)}</textarea></div>
+    <div id="f-synth"></div>
+    <div style="display:flex;gap:var(--e2);justify-content:space-between;flex-wrap:wrap">
+      <button data-act="synthese">Résumer la conversation</button>
+      <span style="display:flex;gap:var(--e2)">
+        <button data-act="fermer">Annuler</button>
+        <button class="p" data-act="save-fiche">Enregistrer</button></span></div>`);
+}
+async function synthese(){
+  $('#f-synth').innerHTML='<div class="squelette" style="height:52px"></div>';
+  try{const s=await jget('/conversations/'+encodeURIComponent(conv)+'/fiche');
+    $('#f-synth').innerHTML=`<label>Synthèse automatique</label>
+      <pre class="brouillon">${esc(s.synthese)}</pre>`;
+  }catch(e){avis($('#f-synth'),'Synthèse impossible : '+e.message);}
 }
 
-async function repondre(){
-  const texte = $('#texte').value.trim(); if(!texte || !courant) return;
-  const r = await api(`/conversations/${encodeURIComponent(courant)}/repondre`, {
-    method:'POST', body: JSON.stringify({texte})});
-  if(r.ok){ $('#texte').value = ''; ouvrir(courant); }
-  else { alert("Envoi impossible : " + (await r.json().catch(()=>({}))).detail); }
+// ── À valider ───────────────────────────────────────────────────────────
+async function chargerValider(){
+  const d=await jget('/escalades?statut=en_attente');
+  $('#cpt-valider').textContent=d.escalades.length?d.escalades.length+' en attente':'';
+  $('#liste-valider').innerHTML=d.escalades.map(e=>`
+    <div class="entree">
+      <div class="principal">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <strong>${esc(e.nom)}</strong>
+          ${e.urgence==='haute'?'<span class="pastille dg">urgent</span>':''}
+          <span class="ptt dis">${dt(e.cree_le)}</span></div>
+        <div class="pt" style="margin-top:var(--e1)">${esc(e.motif)}</div>
+        ${e.question_equipe?`<div class="pt" style="margin-top:var(--e1);color:var(--attente)">
+          ❓ ${esc(e.question_equipe)}</div>`:''}
+        ${e.reponse_proposee?`<pre class="brouillon" style="margin-top:var(--e2)">${esc(e.reponse_proposee)}</pre>`:''}
+      </div>
+      <div class="actions">
+        <button class="p" data-valider="${e.id}">Répondre</button>
+        <button class="q" data-ignorer="${e.id}">Classer</button></div>
+    </div>`).join('')||`<div class="vide"><span class="gl">✅</span>
+      Rien à valider. L'agent gère seul pour le moment. Il vous sollicitera dès qu'il préférera
+      ne pas répondre à votre place.</div>`;
+}
+async function ouvrirValidation(id){
+  const d=await jget('/escalades?statut=toutes');
+  const e=d.escalades.find(x=>x.id===+id); if(!e)return;
+  brouillonId=e.id;
+  feuille(`<h2>Répondre à ${esc(e.nom)}</h2>
+    <div class="avis ac pt">${esc(e.motif)}${e.question_equipe?' — '+esc(e.question_equipe):''}</div>
+    <div><label for="v-txt">Message envoyé au client</label>
+      <textarea id="v-txt" rows="7">${esc(e.reponse_proposee)}</textarea>
+      <p class="ptt dis" style="margin:var(--e1) 0 0">Brouillon proposé par l'agent. Corrigez-le
+        librement : le message partira signé de votre compte.</p></div>
+    <div id="v-err"></div>
+    <div style="display:flex;gap:var(--e2);justify-content:flex-end">
+      <button data-act="fermer">Annuler</button>
+      <button class="p" data-act="envoyer-validation">Envoyer au client</button></div>`);
+  $('#v-txt').dataset.brouillon=e.reponse_proposee;
 }
 
-async function effacer(){
-  if(!courant || !confirm("Effacer définitivement l'historique de cette conversation ?")) return;
-  await api('/conversations/' + encodeURIComponent(courant), {method:'DELETE'});
-  courant = null; $('#fil').innerHTML = '<div class="vide">Historique effacé.</div>'; charger();
+// ── Demandes / consignes / documents / prompt ───────────────────────────
+const LIB={a_traiter:['À traiter','at'],traitee:['Traitée','ok'],annulee:['Annulée','']};
+async function chargerDem(){
+  const f=$('#filtre-dem').value;
+  const d=await jget('/demandes'+(f?'?statut='+f:''));
+  $('#liste-dem').innerHTML=d.demandes.map(x=>{const[l,k]=LIB[x.statut]||[x.statut,''];return`
+    <div class="entree">
+      <div class="principal">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <strong>${esc(x.nom_client)}</strong><span class="pastille ${k}">${l}</span>
+          <span class="ptt dis">#${x.id} · ${dt(x.cree_le)}</span></div>
+        <div class="pt" style="margin-top:var(--e1)">${esc(x.details)}</div>
+        ${x.date_souhaitee?`<div class="ptt dis" style="margin-top:4px">📅 ${esc(x.date_souhaitee)}</div>`:''}
+      </div>
+      <div class="actions">
+        ${x.statut!=='traitee'?`<button data-dem="${x.id}" data-st="traitee">Traiter</button>`:''}
+        ${x.statut!=='annulee'?`<button class="q" data-dem="${x.id}" data-st="annulee">Annuler</button>`:''}
+      </div></div>`}).join('')||`<div class="vide"><span class="gl">📋</span>
+        Aucune demande. Elles apparaîtront ici dès que l'agent enregistrera une commande,
+        une réservation ou un rendez-vous.</div>`;
+}
+const STAT={active:['En vigueur','ok'],programmee:['Programmée','at'],expiree:['Expirée',''],desactivee:['Désactivée','']};
+async function chargerCons(){
+  const d=await jget('/consignes');
+  $('#liste-cons').innerHTML=d.consignes.map(c=>{const[l,k]=STAT[c.statut];return`
+    <div class="entree">
+      <div class="principal">
+        <span class="pastille ${k}">${l}</span>
+        <div class="pt" style="margin-top:var(--e2)">${esc(c.texte)}</div>
+        <div class="ptt dis" style="margin-top:var(--e1)">
+          ${c.debut?'À partir du '+dt(c.debut):'Immédiate'} · ${c.fin?"jusqu'au "+dt(c.fin):'sans date de fin'}</div>
+      </div>
+      <div class="actions">
+        <button data-cons="${c.id}" data-on="${c.activee?0:1}">${c.activee?'Désactiver':'Réactiver'}</button>
+        <button class="dg" data-cons-suppr="${c.id}">Supprimer</button></div>
+    </div>`}).join('')||`<div class="vide"><span class="gl">📌</span>
+      Aucune consigne. Exemple : « plus de tarte au citron du 15 au 25 août, proposer le fondant ».</div>`;
+}
+async function chargerDoc(){
+  const d=await jget('/documents');
+  $('#liste-doc').innerHTML=d.documents.map(f=>`
+    <div class="entree">
+      <div class="principal"><strong>${esc(f.nom)}</strong>
+        <div class="ptt dis" style="margin-top:3px">${(f.octets/1024).toFixed(1)} Ko · modifié le ${dt(f.modifie)}</div></div>
+      <div class="actions">
+        ${f.lisible?`<button data-doc="${esc(f.nom)}">Modifier</button>`:'<span class="ptt dis">non éditable</span>'}
+        <button class="dg" data-doc-suppr="${esc(f.nom)}">Supprimer</button></div>
+    </div>`).join('')||`<div class="vide"><span class="gl">📁</span>
+      Aucun document. Ajoutez vos tarifs ou votre catalogue : l'agent y puisera au lieu d'improviser.</div>`;
+}
+async function chargerPrompt(){
+  const p=await jget('/prompts');
+  $('#sys').value=p.system_prompt;$('#m-fb').value=p.fallback_message;
+  $('#m-er').value=p.error_message;$('#m-qu').value=p.quota_message;
+}
+function formConsigne(){
+  feuille(`<h2>Nouvelle consigne</h2>
+    <div><label for="c-txt">Instruction donnée à l'agent</label>
+      <textarea id="c-txt" rows="3" placeholder="Plus de tarte au citron cette semaine, proposer le fondant"></textarea></div>
+    <div class="duo-champs">
+      <div><label for="c-deb">Début (vide = tout de suite)</label><input id="c-deb" type="datetime-local"></div>
+      <div><label for="c-fin">Fin (vide = jusqu'à désactivation)</label><input id="c-fin" type="datetime-local"></div></div>
+    <div id="c-err"></div>
+    <div style="display:flex;gap:var(--e2);justify-content:flex-end">
+      <button data-act="fermer">Annuler</button><button class="p" data-act="creer-consigne">Créer</button></div>`);
+}
+async function editerDoc(nom){
+  const d=nom?await jget('/documents/'+encodeURIComponent(nom)):{contenu:''};
+  docNom=nom;
+  feuille(`<h2>${nom?'Modifier '+esc(nom):'Nouveau document'}</h2>
+    ${nom?'':`<div><label for="d-nom">Nom du fichier</label><input id="d-nom" placeholder="tarifs.md"></div>`}
+    <textarea id="d-txt" rows="16">${esc(d.contenu)}</textarea>
+    <div id="d-err"></div>
+    <div style="display:flex;gap:var(--e2);justify-content:flex-end">
+      <button data-act="fermer">Annuler</button><button class="p" data-act="save-doc">Enregistrer</button></div>`);
 }
 
-$('#texte').addEventListener('keydown', e => { if(e.key==='Enter') repondre(); });
-$('#champ-jeton').addEventListener('keydown', e => { if(e.key==='Enter') connecter(); });
+// ── Délégation d'événements ─────────────────────────────────────────────
+document.addEventListener('click',async ev=>{
+  const t=ev.target.closest('[data-act],[data-vue],[data-conv],[data-dem],[data-cons],[data-cons-suppr],[data-doc],[data-doc-suppr],[data-valider],[data-ignorer]');
+  if(!t)return; const a=t.dataset;
+  try{
+    if(a.vue!==undefined){ev.preventDefault();aller(a.vue);return;}
+    if(a.conv!==undefined){await ouvrir(a.conv);return;}
+    if(a.dem!==undefined){await api('/demandes/'+a.dem,{method:'PATCH',body:JSON.stringify({statut:a.st})});chargerDem();return;}
+    if(a.cons!==undefined){await api('/consignes/'+a.cons,{method:'PATCH',body:JSON.stringify({activee:a.on==='1'})});chargerCons();return;}
+    if(a.consSuppr!==undefined){if(!confirm('Supprimer cette consigne ?'))return;
+      await api('/consignes/'+a.consSuppr,{method:'DELETE'});chargerCons();return;}
+    if(a.doc!==undefined){await editerDoc(a.doc);return;}
+    if(a.docSuppr!==undefined){if(!confirm('Supprimer '+a.docSuppr+' ?'))return;
+      await api('/documents/'+encodeURIComponent(a.docSuppr),{method:'DELETE'});chargerDoc();return;}
+    if(a.valider!==undefined){await ouvrirValidation(a.valider);return;}
+    if(a.ignorer!==undefined){await api('/escalades/'+a.ignorer+'/ignorer',{method:'POST'});
+      chargerValider();compterValider();return;}
+
+    switch(a.act){
+      case 'connexion':{
+        const r=await api('/connexion',{method:'POST',body:JSON.stringify({
+          email:$('#a-mail').value,mot_de_passe:$('#a-mdp').value})});
+        const j=await r.json().catch(()=>({}));
+        if(r.ok)entrer(j); else avis($('#acces-avis'),j.detail||'Connexion refusée');
+        break;}
+      case 'amorcer':{
+        const r=await api('/amorcer',{method:'POST',body:JSON.stringify({
+          nom:$('#a-nom').value,email:$('#a-mail').value,
+          mot_de_passe:$('#a-mdp').value,jeton:$('#a-jeton').value})});
+        const j=await r.json().catch(()=>({}));
+        if(r.ok)demarrer(); else avis($('#acces-avis'),j.detail||'Création refusée');
+        break;}
+      case 'deconnexion': await api('/deconnexion',{method:'POST'});location.reload();break;
+      case 'fermer': fermer();break;
+      case 'retour': $('#liste-conv').dataset.repli='false';$('#btn-retour').hidden=true;break;
+      case 'fiche': await fiche();break;
+      case 'synthese': await synthese();break;
+      case 'save-fiche':
+        await api('/contacts/'+encodeURIComponent(conv),{method:'PUT',body:JSON.stringify({
+          nom_affiche:$('#f-nom').value,notes:$('#f-notes').value})});
+        fermer();await ouvrir(conv);break;
+      case 'pause':
+        await api(`/conversations/${encodeURIComponent(conv)}/pause`,{method:'POST',
+          body:JSON.stringify({en_pause:!enPause})});await ouvrir(conv);break;
+      case 'repondre':{
+        const v=$('#msg').value.trim(); if(!v||!conv)return;
+        const r=await api(`/conversations/${encodeURIComponent(conv)}/repondre`,{method:'POST',
+          body:JSON.stringify({texte:v})});
+        if(r.ok){$('#msg').value='';await ouvrir(conv);}
+        else alert('Envoi impossible : '+((await r.json().catch(()=>({}))).detail||r.status));
+        break;}
+      case 'envoyer-validation':{
+        const el=$('#v-txt');
+        const r=await api('/escalades/'+brouillonId+'/repondre',{method:'POST',
+          body:JSON.stringify({texte:el.value,brouillon:el.dataset.brouillon})});
+        if(r.ok){fermer();chargerValider();compterValider();if(conv)ouvrir(conv);}
+        else avis($('#v-err'),(await r.json().catch(()=>({}))).detail||'Envoi impossible');
+        break;}
+      case 'new-consigne': formConsigne();break;
+      case 'creer-consigne':{
+        const r=await api('/consignes',{method:'POST',body:JSON.stringify({
+          texte:$('#c-txt').value,debut:$('#c-deb').value||null,fin:$('#c-fin').value||null})});
+        if(r.ok){fermer();chargerCons();}
+        else avis($('#c-err'),(await r.json().catch(()=>({}))).detail||'Erreur');
+        break;}
+      case 'new-doc': await editerDoc(null);break;
+      case 'save-doc':{
+        const nom=docNom||$('#d-nom').value.trim();
+        if(!nom){avis($('#d-err'),'Donnez un nom de fichier.');return;}
+        const r=await api('/documents/'+encodeURIComponent(nom),{method:'PUT',
+          body:JSON.stringify({contenu:$('#d-txt').value})});
+        if(r.ok){fermer();chargerDoc();}
+        else avis($('#d-err'),(await r.json().catch(()=>({}))).detail||'Erreur');
+        break;}
+      case 'save-prompt':{
+        const b=t;b.disabled=true;b.textContent='Enregistrement…';
+        const r=await api('/prompts',{method:'PUT',body:JSON.stringify({
+          system_prompt:$('#sys').value,fallback_message:$('#m-fb').value,
+          error_message:$('#m-er').value,quota_message:$('#m-qu').value})});
+        b.disabled=false;b.textContent=r.ok?'Enregistré ✓':'Enregistrer';
+        if(!r.ok)alert('Erreur : '+((await r.json().catch(()=>({}))).detail||r.status));
+        setTimeout(()=>b.textContent='Enregistrer',2200);
+        break;}
+    }
+  }catch(e){if(e.message!=='session'){console.error(e);alert('Erreur : '+e.message);}}
+});
+$('#feuille').addEventListener('click',e=>{if(e.target.id==='feuille')fermer();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')fermer();
+  if(e.key!=='Enter')return;
+  const i=e.target.id;
+  if(i==='msg'){$('[data-act=repondre]').click();}
+  if(i==='a-mdp'||i==='a-mail'){($('[data-act=connexion]')||$('[data-act=amorcer]'))?.click();}
+  if(i==='a-jeton'){$('[data-act=amorcer]')?.click();}
+});
+document.addEventListener('change',e=>{if(e.target.id==='filtre-dem')chargerDem();});
+demarrer();
 </script>
 </body>
 </html>

@@ -14,11 +14,15 @@ from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 
-from agent.brain import generer_reponse, message_erreur
+from agent.brain import MODE_TRANSPARENCE, generer_reponse, message_erreur
 from agent.memory import (
+    basculer_pause_conversation,
+    conversation_en_pause,
+    enregistrer_escalade,
     effacer_historique,
     enregistrer_message,
     initialiser_base,
+    toucher_contact,
     liberer_evenement,
     marquer_evenement_traite,
     nettoyer_evenements_anciens,
@@ -89,7 +93,7 @@ app = FastAPI(title="AgentKit FR — Agent WhatsApp", version="1.0.0", lifespan=
 
 # Back-office : monté seulement si ADMIN_TOKEN est défini. Il expose des
 # conversations clients, il ne doit jamais être accessible par défaut.
-from agent.admin import ADMIN_TOKEN, est_en_pause, routeur as routeur_admin  # noqa: E402
+from agent.admin import ADMIN_TOKEN, routeur as routeur_admin  # noqa: E402
 
 if ADMIN_TOKEN:
     app.include_router(routeur_admin)
@@ -201,7 +205,7 @@ async def traiter_message(msg: MessageEntrant) -> None:
         try:
             # Un humain a repris la main : on enregistre le message du client
             # pour qu'il apparaisse dans le back-office, mais l'agent se tait.
-            if ADMIN_TOKEN and await est_en_pause(msg.identifiant):
+            if await conversation_en_pause(msg.identifiant):
                 await enregistrer_message(msg.identifiant, "user", msg.texte)
                 logger.info(
                     f"Conversation en pause ({masquer_identifiant(msg.identifiant, msg.par_bsuid)}) : "
@@ -211,10 +215,32 @@ async def traiter_message(msg: MessageEntrant) -> None:
 
             # L'historique est lu AVANT d'enregistrer le message courant :
             # brain.py ajoute le nouveau message à la fin, sinon il serait en double.
+            await toucher_contact(
+                msg.identifiant,
+                nom_whatsapp=msg.contexte.get("nom_profil", ""),
+                username=msg.username,
+                pays=msg.contexte.get("pays", ""),
+            )
             historique = await obtenir_historique(msg.identifiant)
             reponse, vraie_reponse = await generer_reponse(
                 msg.texte, historique, telephone=msg.identifiant
             )
+
+            # Mode « validation humaine » : la réponse devient un brouillon
+            # soumis à l'équipe au lieu de partir directement. C'est le seul
+            # mode où l'AI Act n'exige aucun marquage, puisqu'une personne
+            # endosse la responsabilité éditoriale de chaque message.
+            if MODE_TRANSPARENCE == "validation" and vraie_reponse:
+                await enregistrer_message(msg.identifiant, "user", msg.texte)
+                await enregistrer_escalade(
+                    identifiant=msg.identifiant,
+                    motif="Validation humaine requise avant envoi",
+                    question_equipe="",
+                    reponse_proposee=reponse,
+                )
+                await basculer_pause_conversation(msg.identifiant, True)
+                logger.info("Réponse mise en attente de validation humaine")
+                return
 
             envoye = await fournisseur.envoyer_message(msg.identifiant, reponse, msg.contexte)
 

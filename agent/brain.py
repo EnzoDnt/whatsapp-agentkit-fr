@@ -87,6 +87,35 @@ def horodatage() -> str:
     )
 
 
+async def bloc_consignes() -> str:
+    """
+    Les consignes ponctuelles en vigueur, à ajouter au prompt système.
+
+    C'est l'équivalent du mot laissé à un employé le matin : « plus de tarte au
+    citron cette semaine », « on ferme le 15 ». L'agent ne les voit que pendant
+    leur période de validité — inutile de penser à les retirer.
+    """
+    from agent.memory import consignes_actives
+
+    try:
+        actives = await consignes_actives()
+    except Exception as e:  # noqa: BLE001
+        # Une base indisponible ne doit pas empêcher l'agent de répondre.
+        logger.error(f"Consignes illisibles, on continue sans : {e}")
+        return ""
+
+    if not actives:
+        return ""
+
+    lignes = "\n".join(f"- {c.texte}" for c in actives)
+    return (
+        "\n\n## Consignes en cours\n"
+        "Ces instructions ponctuelles priment sur les informations générales "
+        "ci-dessus. Applique-les sans les citer explicitement au client.\n"
+        f"{lignes}"
+    )
+
+
 def message_erreur() -> str:
     return charger_config_prompts().get(
         "error_message",
@@ -98,6 +127,56 @@ def message_incompris() -> str:
     return charger_config_prompts().get(
         "fallback_message", "Désolé, je n'ai pas bien compris. Pouvez-vous reformuler ?"
     )
+
+
+# Trois façons de satisfaire l'article 50 de l'AI Act (applicable depuis le
+# 2 août 2026 : informer la personne « au plus tard lors de la première
+# interaction »). Le choix se fait à l'installation.
+#
+#   discrete   Une ligne en italique à la fin du premier message. Couvre toute
+#              la conversation, se remarque à peine. Le meilleur compromis
+#              commercial, et c'est le défaut.
+#   explicite  Un encart en tête du premier message. Ne laisse aucun doute ;
+#              plus froid à la lecture.
+#   validation Aucune réponse ne part sans qu'une personne l'ait relue. L'AI Act
+#              lève l'obligation de marquage dès lors qu'un humain endosse la
+#              responsabilité éditoriale — mais c'est fastidieux au quotidien.
+MODE_TRANSPARENCE = (os.getenv("MODE_TRANSPARENCE") or "discrete").strip().lower()
+
+MENTIONS = {
+    "discrete": (
+        "_Cette conversation est assistée par une intelligence artificielle "
+        "pour la rédaction des réponses._"
+    ),
+    "explicite": (
+        "ℹ️ Vous échangez avec un assistant automatique. Demandez « un conseiller » "
+        "à tout moment pour joindre quelqu'un de l'équipe."
+    ),
+}
+
+
+def message_transparence() -> str:
+    """Mention informant le client qu'une IA rédige les réponses."""
+    defaut = MENTIONS.get(MODE_TRANSPARENCE, MENTIONS["discrete"])
+    return charger_config_prompts().get("message_transparence", defaut)
+
+
+def appliquer_transparence(texte: str, premier_echange: bool) -> str:
+    """
+    Ajoute la mention au premier message d'une conversation, et à lui seul.
+
+    La répéter à chaque message serait pénible pour le client sans rien ajouter
+    juridiquement : l'article 50 parle de la « première interaction ».
+    """
+    if not premier_echange or MODE_TRANSPARENCE == "validation":
+        return texte
+    mention = message_transparence().strip()
+    if not mention:
+        return texte
+    # Discrète : en pied de message, en italique. Explicite : en tête, isolée.
+    if MODE_TRANSPARENCE == "explicite":
+        return f"{mention}\n\n{texte}"
+    return f"{texte}\n\n{mention}"
 
 
 def message_saturation() -> str:
@@ -154,7 +233,7 @@ async def generer_reponse(
     messages: list[dict] = [{"role": m["role"], "content": m["content"]} for m in historique]
     messages.append({"role": "user", "content": message})
 
-    systeme = prompt_systeme() + horodatage()
+    systeme = prompt_systeme() + await bloc_consignes() + horodatage()
     outils = schemas_outils()
 
     async def appeler(extra: dict):
@@ -207,7 +286,8 @@ async def generer_reponse(
             if not texte:
                 logger.warning("Claude a renvoyé une réponse sans texte")
                 return message_incompris(), False
-            return texte, True
+
+            return appliquer_transparence(texte, premier_echange=not historique), True
 
         # ── Le modèle demande un ou plusieurs outils ──────────────────────
         # On renvoie TOUS les tool_result dans UN SEUL message utilisateur :
@@ -233,7 +313,7 @@ async def generer_reponse(
                 {
                     "type": "tool_result",
                     "tool_use_id": bloc.id,
-                    "content": executer_outil(bloc.name, arguments),
+                    "content": await executer_outil(bloc.name, arguments),
                 }
             )
         messages.append({"role": "user", "content": resultats})

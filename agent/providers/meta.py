@@ -113,13 +113,18 @@ class FournisseurMeta(FournisseurWhatsApp):
             for changement in entree.get("changes", []):
                 valeur = changement.get("value") or {}
 
-                # Le username vit dans contacts[], pas dans messages[].
-                usernames: dict[str, str] = {}
+                # Le profil vit dans contacts[], pas dans messages[].
+                profils: dict[str, dict] = {}
                 for contact in valeur.get("contacts", []):
-                    pseudo = (contact.get("profile") or {}).get("username", "")
+                    profil = contact.get("profile") or {}
+                    fiche = {
+                        "username": profil.get("username", ""),
+                        "nom": profil.get("name", ""),
+                        "pays": profil.get("country_code", ""),
+                    }
                     for cle in (contact.get("wa_id"), contact.get("user_id")):
-                        if cle and pseudo:
-                            usernames[cle] = pseudo
+                        if cle:
+                            profils[cle] = fiche
 
                 for msg in valeur.get("messages", []):
                     if msg.get("type") != "text":
@@ -144,11 +149,13 @@ class FournisseurMeta(FournisseurWhatsApp):
                             message_id=msg.get("id", ""),
                             est_sortant=False,
                             par_bsuid=not telephone,
-                            username=usernames.get(identifiant, ""),
+                            username=profils.get(identifiant, {}).get("username", ""),
                             contexte={
                                 "evenement_id": msg.get("id", ""),
                                 "bsuid": bsuid,
                                 "telephone": telephone,
+                                "nom_profil": profils.get(identifiant, {}).get("nom", ""),
+                                "pays": profils.get(identifiant, {}).get("pays", ""),
                             },
                         )
                     )
