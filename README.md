@@ -187,7 +187,7 @@ Deux voies, décrites dans [`HEBERGEMENT.md`](HEBERGEMENT.md) :
 - **Coolify sur votre serveur** — ~5 €/mois pour *plusieurs* agents, données en
   Europe. La voie souveraine, plus exigeante à mettre en place.
 
-Le kit fournit le `Dockerfile` et le `docker-compose.yml` : les deux hébergeurs les
+Le kit fournit le `Dockerfile` et le `docker-compose.yaml` : les deux hébergeurs les
 lisent tels quels.
 
 ## Commandes

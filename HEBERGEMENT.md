@@ -189,11 +189,27 @@ vers Coolify : à partir du deuxième agent, l'écart de coût devient net.
    vCPU et 4 Go suffisent largement pour plusieurs agents.
 2. 🔴 Il installe Coolify — une seule commande, donnée sur https://coolify.io
 3. 🔴 Dans Coolify : **New Resource** → **Docker Compose** → son dépôt GitHub.
-   Le `docker-compose.yml` du kit est lu tel quel : agent et PostgreSQL montés
+   Le `docker-compose.yaml` du kit est lu tel quel : agent et PostgreSQL montés
    ensemble.
 4. 🔴 Il renseigne les variables d'environnement, dont `POSTGRES_PASSWORD`
    (✅ génère-le : `openssl rand -hex 24`).
-5. 🔴 Il indique son nom de domaine. Coolify s'occupe du certificat HTTPS.
+5. 🔴 Il indique son nom de domaine, **sur le service `agent` uniquement** :
+   la base ne doit jamais être joignable depuis l'extérieur. Coolify s'occupe
+   du certificat HTTPS.
+
+**Deux échecs prévisibles, à annoncer avant qu'ils arrivent.**
+
+*« Docker Compose file not found »* — Coolify cherche `/docker-compose.yaml`.
+Un fichier nommé `.yml` le fait échouer sans indiquer que seule l'extension
+diffère. Et comme la commande `docker compose` accepte les deux, la pile venait
+d'être testée avec succès en local : la personne cherche donc partout sauf au
+bon endroit. Le kit livre un `docker-compose.yaml` : ne le renomme pas.
+
+*Build pack Dockerfile au lieu de Docker Compose* — le premier ne monte que
+l'agent, sans sa base. Et sans base, l'agent ne tombe pas en panne : il retombe
+sur SQLite à l'intérieur du conteneur, démarre normalement, répond normalement,
+puis perd l'historique de toutes les conversations au premier redéploiement.
+Rien ne le signale sur le moment, ce qui en fait le plus coûteux des deux.
 
 ---
 

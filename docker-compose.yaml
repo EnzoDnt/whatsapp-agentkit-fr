@@ -1,5 +1,10 @@
 # Pile complète pour un serveur que vous gérez (Coolify, VPS, machine locale).
 #
+# Extension .yaml et non .yml : Coolify cherche /docker-compose.yaml par défaut
+# et s'arrête sur « Docker Compose file not found » avant même de tenter le
+# build — le message ne dit pas que seule l'extension diffère. La commande
+# `docker compose` trouve les deux, elle : rien ne se perd à s'aligner.
+#
 # Coolify sait lire ce fichier tel quel : il crée les deux services, gère le
 # certificat HTTPS et redéploie à chaque push.
 
