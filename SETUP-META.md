@@ -223,22 +223,116 @@ apparaît masqué : c'est voulu, pas un bug.
 
 ---
 
-## Étape 7 — Token permanent 🔴 manuel
+## Étape 7 — Token permanent (System User) 🔴 manuel
 
-Le token de l'étape 2 expire au bout de 24 h. Pour que l'agent tourne durablement :
+> C'est l'étape la plus technique de tout le parcours. Prends le temps de la
+> guider écran par écran : c'est là que les gens abandonnent. Environ 5 minutes.
 
-> 🔴 **Environ 4 minutes.**
-> 1. https://business.facebook.com/settings/system-users → **Ajouter**
-> 2. Nom au choix, rôle **Admin**
-> 3. **Ajouter des ressources** → ton app (contrôle total) → ton compte WhatsApp (contrôle total)
-> 4. **Générer un token**, avec ces trois permissions :
->    `whatsapp_business_messaging`, `whatsapp_business_management`, `business_management`
-> 5. Copie-le **immédiatement** : il ne sera plus jamais affiché
+### Pourquoi
 
-✅ **Tu vérifies** avec le même `curl` qu'à l'étape 2, puis tu remplaces
-`META_ACCESS_TOKEN` dans `.env` et tu redémarres.
+Le token de l'étape 2 expire au bout de 24 h. Un agent branché dessus tombera en
+panne le lendemain, **silencieusement** : le serveur tourne, le webhook arrive,
+mais chaque envoi échoue en `190`. Il faut un token qui n'expire jamais.
 
----
+| Type de token | Durée de vie | Verdict |
+|---|---|---|
+| Temporaire (console WhatsApp) | 24 h | Pour tester tout de suite |
+| Long-lived user token | 60 jours | Inutile : il expire quand même |
+| **System User** | **Permanent** | ✅ Le seul valable en production |
+
+> La Graph API peut générer un token System User
+> (`POST /{app_id}/system_user_access_tokens`), mais l'appel exige de **déjà**
+> détenir un token System User admin. Le premier passe donc obligatoirement par
+> l'interface. Ne cherche pas à automatiser ce tour-là : c'est impossible.
+
+### La procédure
+
+> 🔴 **J'ai besoin de toi, environ 5 minutes. Suis exactement cet ordre.**
+>
+> **1. Ouvre les paramètres du portefeuille d'entreprise**
+> https://business.facebook.com/settings/system-users
+> (Meta redirige parfois vers `/latest/settings/system_users` — c'est le même écran.)
+> Si plusieurs portefeuilles existent, **choisis celui qui contient ton compte
+> WhatsApp Business**. Se tromper de portefeuille est l'erreur numéro un.
+>
+> **2. Crée l'utilisateur système**
+> **Ajouter** → un nom au choix (par exemple « agent-whatsapp ») → rôle **Admin**
+> → **Créer**.
+>
+> **3. Attribue les DEUX ressources** — c'est ici que ça casse le plus souvent
+> Sélectionne l'utilisateur créé → **Ajouter des ressources**.
+> Il en faut **deux**, pas une :
+>
+> - Onglet **Applications** → ton app (`lm-agent-kit-test`) → **Contrôle total**
+> - Onglet **Comptes WhatsApp** → ton compte WhatsApp Business → **Contrôle total**
+>
+> Puis **Enregistrer les modifications**.
+>
+> N'oublie pas la seconde : avec seulement l'app, le token se génère sans erreur
+> mais tout appel WhatsApp répondra `(#200) permission denied`. Rien n'indique la
+> cause.
+>
+> **4. Génère le token**
+> **Générer un nouveau token** → sélectionne ton app → coche ces **trois**
+> permissions, ni plus ni moins :
+>
+> - `whatsapp_business_messaging` — envoyer et recevoir les messages
+> - `whatsapp_business_management` — gérer le compte et les abonnements
+> - `business_management` — lire le portefeuille d'entreprise
+>
+> → **Générer un token**
+>
+> **5. Copie-le TOUT DE SUITE**
+> Meta ne l'affichera plus jamais. Si tu fermes la fenêtre sans copier, il faut
+> tout recommencer à partir de l'étape 4.
+>
+> Colle-le-moi : je le mets dans `.env` et nulle part ailleurs.
+
+### Vérification ✅ — trois contrôles, dans cet ordre
+
+**1. Le token est-il valide et permanent ?**
+
+```bash
+curl -s "https://graph.facebook.com/v25.0/debug_token?input_token=$META_ACCESS_TOKEN&access_token=$META_APP_ID%7C$META_APP_SECRET" \
+  | python3 -m json.tool
+```
+
+Attendu : `"is_valid": true` et surtout **`"expires_at": 0`** — le zéro signifie
+« n'expire jamais ». Une autre valeur = ce n'est pas un token System User,
+recommence. Vérifie aussi que `scopes` contient bien les trois permissions.
+
+**2. Donne-t-il accès au numéro WhatsApp ?**
+
+```bash
+curl -s "https://graph.facebook.com/v25.0/$META_PHONE_NUMBER_ID?fields=display_phone_number,verified_name,quality_rating" \
+  -H "Authorization: Bearer $META_ACCESS_TOKEN"
+```
+
+Un JSON avec `display_phone_number` = ✅. Un `(#200)` = la ressource « Comptes
+WhatsApp » n'a pas été attribuée à l'étape 3.
+
+**3. Le WABA est-il abonné à l'app ?** (voir 4 bis)
+
+```bash
+curl -X POST "https://graph.facebook.com/v25.0/$META_WABA_ID/subscribed_apps" \
+  -H "Authorization: Bearer $META_ACCESS_TOKEN"
+```
+
+Attendu : `{"success": true}`.
+
+### Quand ça ne marche pas
+
+| Message | Cause réelle | Correction |
+|---|---|---|
+| `(#200) You do not have permission` | Ressource WhatsApp non attribuée | Étape 3, onglet **Comptes WhatsApp** |
+| `expires_at` ≠ 0 | Token utilisateur, pas System User | Reprends à l'étape 1 |
+| `(#190) Invalid OAuth access token` | Copie tronquée ou espace parasite | Recopie sans retour à la ligne |
+| Token absent des scopes attendus | Permissions non cochées | Étape 4, régénère |
+| L'app n'apparaît pas dans la liste | Mauvais portefeuille d'entreprise | Étape 1, change de portefeuille |
+
+✅ Une fois les trois contrôles passés : remplace `META_ACCESS_TOKEN` dans `.env`
+et redémarre le serveur. `GET /` doit alors renvoyer `"statut":"ok"` avec le
+numéro affiché — et non plus `"degrade"`.
 
 ## Étape 8 — Production
 
