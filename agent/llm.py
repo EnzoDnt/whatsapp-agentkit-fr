@@ -217,7 +217,8 @@ class ClientCompatibleOpenAI(ClientLLM):
         except ImportError as e:  # pragma: no cover
             raise ErreurLLM(
                 f"Le fournisseur « {fournisseur} » a besoin du paquet openai.\n"
-                "  Installez-le :  uv pip install openai"
+                "  Il est normalement dans requirements.txt ; si vous l'avez retiré,\n"
+                "  remettez-le puis réinstallez :  uv pip install openai"
             ) from e
 
         base, variable, _ = COMPATIBLES_OPENAI[fournisseur]

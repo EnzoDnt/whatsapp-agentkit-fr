@@ -7,3 +7,9 @@ sqlalchemy[asyncio]>=2.0.52
 pyyaml>=6.0.3
 aiosqlite>=0.22.0
 asyncpg>=0.31.0
+# SDK OpenAI : sert aussi à OpenRouter et Google (Gemini), qui exposent
+# la même API. Inclus d'office pour que changer de fournisseur ne soit
+# qu'une variable à modifier — sinon le déploiement Docker casserait,
+# le paquet manquant ne pouvant plus s'ajouter après coup sans rebuild.
+# Inoffensif si vous restez sur Anthropic (le défaut).
+openai>=2.0.0,<4.0.0

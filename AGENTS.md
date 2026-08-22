@@ -72,7 +72,6 @@ gauche.
 | Tester le webhook | MCP `devtools_webhook_test` |
 | Consulter la doc Meta à jour | MCP `devtools_discovery` (aucune permission requise) |
 | Installer Python, créer le venv, installer les dépendances | `uv` / `python3` |
-| Installer le paquet d'un autre fournisseur de modèle | `uv pip install openai` |
 | Poser le logo du client et écrire `config/marque.yaml` | édition de fichier |
 | Créer le dépôt privé de déploiement et le pousser | `gh repo create --private` |
 | Écrire le `.gitignore` du dépôt de déploiement | édition de fichier |
@@ -154,12 +153,9 @@ puis la clé correspondante.
 | `openrouter` | `OPENROUTER_API_KEY` | `moonshotai/kimi-k3` |
 | `google` | `GOOGLE_API_KEY` | `gemini-3.7-flash` |
 
-Pour tout ce qui n'est pas Anthropic, installe le paquet nécessaire — ne le lui
-demande pas :
-
-```bash
-uv pip install openai
-```
+Aucun paquet à installer : le SDK qui couvre OpenAI, OpenRouter et Google est
+déjà dans `requirements.txt`. Changer de fournisseur n'est donc qu'une variable
+à modifier, y compris une fois déployé.
 
 **Vérification** : lance le simulateur et envoie un message. Une réponse
 cohérente = le fournisseur répond. Une erreur de configuration est explicite
