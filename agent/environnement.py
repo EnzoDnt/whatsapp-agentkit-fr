@@ -95,6 +95,19 @@ def audit_configuration() -> list[dict]:
 
     en_ligne = est_production()
 
+    # Le simulateur en ligne : le mode d'échec le plus silencieux du kit.
+    # Sa valeur par défaut fait démarrer l'agent sans WhatsApp, avec un statut
+    # « ok » trompeur — il n'est branché à rien. En ligne, c'est presque
+    # toujours une variable WHATSAPP_PROVIDER=meta oubliée.
+    fournisseur = os.getenv("WHATSAPP_PROVIDER", "").strip().lower()
+    if en_ligne and fournisseur in ("", "simulateur", "simulator", "local"):
+        signaler(
+            "critique", "WHATSAPP_PROVIDER",
+            "L'agent tourne en mode simulateur : il n'est connecté à AUCUN "
+            "WhatsApp et ne recevra jamais de message réel, malgré un statut « ok ».",
+            "Ajoutez WHATSAPP_PROVIDER=meta dans vos variables, avec les clés Meta.",
+        )
+
     if en_ligne and not os.getenv("SESSION_SECRET", "").strip():
         signaler(
             "critique", "SESSION_SECRET",

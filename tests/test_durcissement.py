@@ -316,3 +316,26 @@ def test_les_reessais_ne_consomment_pas_le_quota_du_client(client, cerveau_simul
     telephone = next(iter(limiteur._historique), None)
     consommes = len(limiteur._historique.get(telephone, [])) if telephone else 0
     assert consommes == 1, f"{consommes} jetons consommés pour un seul message"
+
+
+def test_simulateur_en_ligne_est_signale_comme_critique(monkeypatch):
+    """
+    Le mode d'échec le plus silencieux : l'agent tourne, affiche « ok », et
+    n'est branché à aucun WhatsApp parce que WHATSAPP_PROVIDER a été oublié.
+    En ligne, la revue doit le crier, pas le laisser passer.
+    """
+    from agent import environnement
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("WHATSAPP_PROVIDER", raising=False)
+    alertes = {a["sujet"]: a["gravite"] for a in environnement.audit_configuration()}
+    assert alertes.get("WHATSAPP_PROVIDER") == "critique"
+
+
+def test_provider_meta_ne_declenche_pas_l_alerte(monkeypatch):
+    from agent import environnement
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("WHATSAPP_PROVIDER", "meta")
+    sujets = {a["sujet"] for a in environnement.audit_configuration()}
+    assert "WHATSAPP_PROVIDER" not in sujets
