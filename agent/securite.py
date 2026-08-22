@@ -79,6 +79,33 @@ def masquer_contenu(texte: str, maximum: int = 60) -> str:
     return texte if len(texte) <= maximum else texte[: maximum - 1] + "…"
 
 
+# ── Liste blanche de test ────────────────────────────────────────────────
+
+# Quand on branche l'agent sur un numéro DÉJÀ EN PRODUCTION, les vrais clients
+# continuent d'écrire pendant les essais. Sans garde-fou, ils reçoivent les
+# réponses d'un agent à moitié configuré.
+#
+# Renseignez TEST_ALLOWLIST pendant la phase de test : l'agent ne répond QU'À
+# ces numéros et ignore poliment tout le reste. Laissez vide en production.
+_brut = os.getenv("TEST_ALLOWLIST", "").strip()
+LISTE_BLANCHE: set[str] = {
+    n.strip().lstrip("+").replace(" ", "") for n in _brut.split(",") if n.strip()
+}
+
+if LISTE_BLANCHE:
+    logger.warning(
+        f"MODE TEST : l'agent ne répondra qu'à {len(LISTE_BLANCHE)} numéro(s) autorisé(s). "
+        "Videz TEST_ALLOWLIST pour repasser en service normal."
+    )
+
+
+def autorise_a_repondre(identifiant: str) -> bool:
+    """Vrai si l'agent a le droit de répondre à cet interlocuteur."""
+    if not LISTE_BLANCHE:
+        return True
+    return identifiant.lstrip("+").replace(" ", "") in LISTE_BLANCHE
+
+
 # ── Limitation de débit par client ───────────────────────────────────────
 
 

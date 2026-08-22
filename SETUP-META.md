@@ -273,8 +273,14 @@ mais chaque envoi échoue en `190`. Il faut un token qui n'expire jamais.
 > cause.
 >
 > **4. Génère le token**
-> **Générer un nouveau token** → sélectionne ton app → coche ces **trois**
-> permissions, ni plus ni moins :
+> **Générer un nouveau token** → sélectionne ton app.
+>
+> ⚠️ **Règle l'expiration sur « Jamais »** avant de valider. Le menu propose
+> « 60 jours » par défaut, et c'est le piège : le token obtenu est bien de type
+> `SYSTEM_USER`, tout semble correct, mais il meurt dans deux mois. Seul
+> `debug_token` révèle la différence (voir vérification 1).
+>
+> Coche ensuite ces **trois** permissions :
 >
 > - `whatsapp_business_messaging` — envoyer et recevoir les messages
 > - `whatsapp_business_management` — gérer le compte et les abonnements
@@ -297,9 +303,17 @@ curl -s "https://graph.facebook.com/v25.0/debug_token?input_token=$META_ACCESS_T
   | python3 -m json.tool
 ```
 
-Attendu : `"is_valid": true` et surtout **`"expires_at": 0`** — le zéro signifie
-« n'expire jamais ». Une autre valeur = ce n'est pas un token System User,
-recommence. Vérifie aussi que `scopes` contient bien les trois permissions.
+Attendu : `"is_valid": true`, `"type": "SYSTEM_USER"`, et surtout
+**`"expires_at": 0`** — le zéro signifie « n'expire jamais ».
+
+Si `expires_at` porte une date, le token est bien un System User mais avec
+l'expiration à 60 jours : retourne à l'étape 4 et choisis **« Jamais »**. C'est
+l'erreur la plus sournoise du parcours, parce que tout fonctionne pendant deux
+mois avant de tomber en panne sans prévenir.
+
+Vérifie aussi les `scopes` : `whatsapp_business_messaging` et
+`whatsapp_business_management` sont indispensables. `business_management` ne sert
+qu'à lire le portefeuille — son absence n'empêche pas l'agent de fonctionner.
 
 **2. Donne-t-il accès au numéro WhatsApp ?**
 
@@ -325,7 +339,8 @@ Attendu : `{"success": true}`.
 | Message | Cause réelle | Correction |
 |---|---|---|
 | `(#200) You do not have permission` | Ressource WhatsApp non attribuée | Étape 3, onglet **Comptes WhatsApp** |
-| `expires_at` ≠ 0 | Token utilisateur, pas System User | Reprends à l'étape 1 |
+| `expires_at` ≠ 0, type `SYSTEM_USER` | Expiration laissée à « 60 jours » | Étape 4, choisis **« Jamais »** |
+| `expires_at` ≠ 0, autre type | Token utilisateur, pas System User | Reprends à l'étape 1 |
 | `(#190) Invalid OAuth access token` | Copie tronquée ou espace parasite | Recopie sans retour à la ligne |
 | Token absent des scopes attendus | Permissions non cochées | Étape 4, régénère |
 | L'app n'apparaît pas dans la liste | Mauvais portefeuille d'entreprise | Étape 1, change de portefeuille |

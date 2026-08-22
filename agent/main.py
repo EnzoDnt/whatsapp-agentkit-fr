@@ -26,7 +26,13 @@ from agent.memory import (
     purger_donnees_expirees,
 )
 from agent.providers import ErreurConfiguration, MessageEntrant, obtenir_fournisseur
-from agent.securite import depenses, limiteur, masquer_contenu, masquer_identifiant
+from agent.securite import (
+    autorise_a_repondre,
+    depenses,
+    limiteur,
+    masquer_contenu,
+    masquer_identifiant,
+)
 
 load_dotenv()
 
@@ -152,6 +158,15 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
     empiles = 0
     for msg in messages:
         if msg.est_sortant or not msg.texte.strip():
+            continue
+
+        # Garde-fou de test : sur un numéro déjà en production, on ne veut pas
+        # qu'un vrai client tombe sur un agent en cours de configuration.
+        if not autorise_a_repondre(msg.identifiant):
+            logger.info(
+                f"Hors liste blanche de test : "
+                f"{masquer_identifiant(msg.identifiant, msg.par_bsuid)} ignoré (aucune réponse envoyée)"
+            )
             continue
 
         autorise, restants = limiteur.autoriser(msg.identifiant)
