@@ -40,4 +40,11 @@ sys.exit(0 if urllib.request.urlopen(f\"http://127.0.0.1:{os.getenv('PORT','8000
 # Coolify et la plupart des hébergeurs imposent le port par variable. Écrit en
 # dur, le conteneur démarre normalement mais ne reçoit jamais aucun trafic, et
 # rien dans les journaux ne l'explique.
-CMD uvicorn agent.main:app --host 0.0.0.0 --port ${PORT:-8000}
+#
+# --no-server-header : sans lui, chaque réponse annonce « server: uvicorn » à
+# qui interroge l'adresse. Ça ne donne aucun accès, mais ça désigne la pile à
+# viser et ça alimente les scans automatiques. On le retire ici plutôt qu'au
+# niveau du proxy : la mesure suit l'image partout — Coolify, Railway, un VPS
+# nu — au lieu de dépendre d'une case cochée dans une interface.
+# L'en-tête Date, lui, reste : HTTP/1.1 l'exige d'un serveur qui a une horloge.
+CMD uvicorn agent.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-server-header

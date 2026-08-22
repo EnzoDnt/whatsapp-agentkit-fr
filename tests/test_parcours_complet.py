@@ -379,3 +379,47 @@ class TestPlafondDepense:
 import pathlib as _pathlib  # noqa: E402
 
 RACINE_KIT = _pathlib.Path(__file__).resolve().parent.parent
+
+
+class TestEnTetesHTTP:
+    """
+    Ce que l'agent annonce au monde.
+
+    `server: uvicorn` n'ouvre aucun accès, mais il désigne la pile à viser et
+    suffit aux scanners pour classer l'adresse. La suppression vit dans le
+    `Dockerfile` plutôt qu'au niveau du proxy : elle suit l'image chez
+    n'importe quel hébergeur, au lieu de dépendre d'une case cochée dans une
+    interface — et une case, ça se perd à la migration suivante.
+    """
+
+    def test_l_image_ne_publie_pas_le_serveur(self):
+        contenu = (RACINE_KIT / "Dockerfile").read_text(encoding="utf-8")
+        lancement = [l for l in contenu.splitlines() if l.startswith("CMD")]
+        assert lancement, "aucune commande de démarrage dans le Dockerfile"
+        assert "--no-server-header" in lancement[0], (
+            "uvicorn est lancé sans --no-server-header : chaque réponse "
+            "annoncera « server: uvicorn » à qui interroge l'adresse"
+        )
+
+    def test_l_en_tete_date_est_conserve(self):
+        """
+        Le retirer serait une fausse bonne idée : HTTP/1.1 exige `Date` d'un
+        serveur qui a une horloge, et son absence casse la mise en cache.
+        """
+        contenu = (RACINE_KIT / "Dockerfile").read_text(encoding="utf-8")
+        assert "--no-date-header" not in contenu
+
+    def test_le_compose_ne_reintroduit_pas_le_defaut(self):
+        """
+        Un `command:` dans le compose écraserait la commande du Dockerfile, et
+        l'en-tête reviendrait sans que rien ne le signale.
+        """
+        import re
+
+        compose = (RACINE_KIT / "docker-compose.yaml").read_text(encoding="utf-8")
+        surcharges = [l for l in compose.splitlines()
+                      if re.match(r"\s+(command|entrypoint):", l)]
+        for ligne in surcharges:
+            assert "--no-server-header" in ligne, (
+                f"le compose surcharge le démarrage sans conserver l'option : {ligne.strip()}"
+            )

@@ -273,6 +273,48 @@ clients.
 
 ---
 
+## 4 bis. Ne pas annoncer sa pile publiquement
+
+Par défaut, chaque réponse HTTP porte un en-tête `server: uvicorn`. Ça n'ouvre
+aucun accès, mais ça désigne la technologie à viser et ça suffit aux scanners
+automatiques pour classer l'adresse. Le kit le supprime déjà **dans l'image** :
+le `Dockerfile` lance uvicorn avec `--no-server-header`, donc la mesure suit
+l'agent chez n'importe quel hébergeur, sans réglage.
+
+Vérifie-le après le déploiement :
+
+```bash
+curl -sI https://<adresse-publique>/ | grep -i '^server'
+```
+
+Aucune ligne en retour : c'est le résultat attendu.
+
+**Si une ligne apparaît quand même**, c'est le proxy qui la remet — certaines
+configurations Nginx ajoutent leur propre `Server`. Deux cas :
+
+- **Coolify (Traefik, par défaut).** Traefik transmet l'en-tête du conteneur
+  sans en ajouter : si le `Dockerfile` est à jour, il n'y a rien à faire. Pour
+  le forcer malgré tout — utile quand d'autres services partagent le même proxy —
+  ajoute ces étiquettes dans **ton service → Advanced → Docker labels** (une
+  valeur vide *supprime* l'en-tête, elle ne le vide pas) :
+
+  ```
+  traefik.http.middlewares.sans-server.headers.customResponseHeaders.Server=
+  traefik.http.routers.<nom-du-routeur>.middlewares=sans-server
+  ```
+
+  Le `<nom-du-routeur>` se lit dans les étiquettes que Coolify a déjà générées
+  pour ce service — reprends-le tel quel, ne l'invente pas, sinon la règle ne
+  s'applique à rien et rien ne le signale.
+
+- **Nginx en frontal.** Ajoute `server_tokens off;` dans le bloc `http`, et
+  `proxy_hide_header Server;` dans le `location` qui sert l'agent.
+
+Ne touche pas à l'en-tête `Date` : HTTP/1.1 l'exige d'un serveur qui a une
+horloge, et le retirer casse la mise en cache correcte des réponses.
+
+---
+
 ## 5. Aller plus loin sur l'hébergement
 
 À placer une fois l'agent en ligne, pas avant. C'est une information, pas une
