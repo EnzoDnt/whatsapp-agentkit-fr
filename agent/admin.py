@@ -28,8 +28,11 @@ from agent.auth import (
     Utilisateur,
     aucun_utilisateur,
     authentifier,
+    changer_mot_de_passe,
     creer_jeton,
     creer_utilisateur,
+    definir_activation,
+    exiger_secret,
     limiteur_connexion,
     poser_cookie,
     retirer_cookie,
@@ -94,6 +97,7 @@ async def amorcer(corps: dict, request: Request, reponse: Response):
     Sans cette barrière, le premier visiteur d'une console fraîchement déployée
     s'attribuerait le compte administrateur.
     """
+    exiger_secret()
     if not await aucun_utilisateur():
         raise HTTPException(409, "Un compte existe déjà. Connectez-vous.")
     fourni = (corps.get("jeton") or "").strip()
@@ -105,12 +109,13 @@ async def amorcer(corps: dict, request: Request, reponse: Response):
         nom=corps.get("nom", ""),
         mot_de_passe=corps.get("mot_de_passe", ""),
     )
-    poser_cookie(reponse, creer_jeton(identifiant))
+    poser_cookie(reponse, creer_jeton(identifiant), request)
     return {"etat": "connecte"}
 
 
 @routeur.post("/connexion")
 async def connexion(corps: dict, request: Request, reponse: Response):
+    exiger_secret()
     ip = request.client.host if request.client else "inconnue"
     if not limiteur_connexion.autorise(ip):
         raise HTTPException(429, "Trop de tentatives. Réessayez dans quelques minutes.")
@@ -123,7 +128,7 @@ async def connexion(corps: dict, request: Request, reponse: Response):
         raise HTTPException(401, "Adresse e-mail ou mot de passe incorrect")
 
     limiteur_connexion.succes(ip)
-    poser_cookie(reponse, creer_jeton(u.id))
+    poser_cookie(reponse, creer_jeton(u.id), request)
     logger.info(f"Connexion à la console : {u.email}")
     return {"etat": "connecte", "nom": u.nom, "email": u.email}
 
@@ -158,6 +163,35 @@ async def ajouter_utilisateur(corps: dict):
         mot_de_passe=corps.get("mot_de_passe", ""),
     )
     return {"id": identifiant}
+
+
+@routeur.patch("/utilisateurs/{identifiant}", dependencies=[Depends(verifier_jeton)])
+async def activer_utilisateur(
+    identifiant: int, corps: dict, utilisateur=Depends(utilisateur_courant)
+):
+    """
+    Coupe (ou rend) l'accès d'un compte.
+
+    Indispensable au départ d'un salarié : la console donne accès aux
+    conversations de tous les clients. Comme les sessions sont sans état, la
+    coupure est vérifiée à chaque requête — elle prend effet immédiatement, et
+    n'attend pas l'expiration du cookie.
+    """
+    actif = bool(corps.get("actif", True))
+    courriel = await definir_activation(identifiant, actif, utilisateur.id)
+    logger.info(
+        f"Accès {'rendu à' if actif else 'retiré à'} {courriel} par {utilisateur.email}"
+    )
+    return {"id": identifiant, "actif": actif}
+
+
+@routeur.post("/motdepasse", dependencies=[Depends(verifier_jeton)])
+async def modifier_mot_de_passe(corps: dict, utilisateur=Depends(utilisateur_courant)):
+    """Changement de son propre mot de passe."""
+    await changer_mot_de_passe(
+        utilisateur.id, corps.get("ancien", ""), corps.get("nouveau", "")
+    )
+    return {"statut": "modifie"}
 
 
 @routeur.get("/")
@@ -306,6 +340,25 @@ DOSSIER_KNOWLEDGE = Path("knowledge")
 FICHIER_PROMPTS = Path("config/prompts.yaml")
 EXTENSIONS_AUTORISEES = {".md", ".txt", ".csv", ".json", ".yaml", ".yml"}
 
+# Plafonds d'écriture. Sans eux, un envoi répété remplit le disque du serveur —
+# et sur un hébergeur, un disque plein arrête l'agent sans message clair.
+# 512 Ko pour un document, c'est déjà un tarif de plusieurs centaines de pages ;
+# tout ce qui dépasse relève du fichier joint, pas d'un texte à donner au modèle.
+MAX_OCTETS_DOCUMENT = 512 * 1024
+MAX_OCTETS_PROMPT = 64 * 1024
+MAX_DOCUMENTS = 200
+
+
+def _verifier_taille(texte: str, maximum: int, quoi: str) -> str:
+    octets = len(texte.encode("utf-8"))
+    if octets > maximum:
+        raise HTTPException(
+            413,
+            f"{quoi} trop volumineux : {octets // 1024} Ko pour un maximum de "
+            f"{maximum // 1024} Ko. Découpez-le en plusieurs fichiers.",
+        )
+    return texte
+
 
 def _nom_de_fichier_sur(nom: str) -> str:
     """
@@ -354,6 +407,7 @@ async def ecrire_prompts(corps: dict):
     """
     if not (corps.get("system_prompt") or "").strip():
         raise HTTPException(400, "Le prompt système ne peut pas être vide")
+    _verifier_taille(corps["system_prompt"], MAX_OCTETS_PROMPT, "Le prompt système")
 
     FICHIER_PROMPTS.parent.mkdir(exist_ok=True)
     if FICHIER_PROMPTS.exists():
@@ -361,6 +415,11 @@ async def ecrire_prompts(corps: dict):
             f".{datetime.now(timezone.utc):%Y%m%d-%H%M%S}.bak"
         )
         sauvegarde.write_text(FICHIER_PROMPTS.read_text(encoding="utf-8"), encoding="utf-8")
+        # On ne garde que les dix dernières : une sauvegarde par enregistrement,
+        # conservée à vie, finit par saturer le disque d'un petit serveur.
+        anciennes = sorted(FICHIER_PROMPTS.parent.glob("prompts.*.bak"))
+        for vieille in anciennes[:-10]:
+            vieille.unlink(missing_ok=True)
 
     donnees = {
         "system_prompt": corps["system_prompt"],
@@ -407,9 +466,20 @@ async def lire_document(nom: str):
 
 @routeur.put("/documents/{nom}", dependencies=[Depends(verifier_jeton)])
 async def ecrire_document(nom: str, corps: dict):
+    contenu = _verifier_taille(
+        corps.get("contenu", "") or "", MAX_OCTETS_DOCUMENT, "Le document"
+    )
     chemin = DOSSIER_KNOWLEDGE / _nom_de_fichier_sur(nom)
     DOSSIER_KNOWLEDGE.mkdir(exist_ok=True)
-    chemin.write_text(corps.get("contenu", ""), encoding="utf-8")
+
+    if not chemin.exists():
+        existants = sum(1 for c in DOSSIER_KNOWLEDGE.iterdir() if c.is_file())
+        if existants >= MAX_DOCUMENTS:
+            raise HTTPException(
+                413, f"Limite de {MAX_DOCUMENTS} documents atteinte. Supprimez-en avant d'en ajouter."
+            )
+
+    chemin.write_text(contenu, encoding="utf-8")
     logger.info(f"Document modifié depuis le back-office : {chemin.name}")
     return {"statut": "enregistre", "nom": chemin.name}
 
@@ -557,7 +627,7 @@ async def fiche_client(identifiant: str):
     éviter de conserver un profil client figé qu'il faudrait ensuite maintenir
     et purger séparément.
     """
-    from agent.brain import MODELE, client
+    from agent.brain import client_llm
 
     async with Session() as session:
         r = await session.execute(
@@ -572,29 +642,39 @@ async def fiche_client(identifiant: str):
         f"{'Client' if m.role == 'user' else 'Agent'} : {m.contenu}" for m in messages
     )
 
+    # On passe par la couche commune aux fournisseurs, et non par le client
+    # Anthropic en direct : sinon la synthèse est la seule fonction du produit
+    # qui exige Anthropic, et elle casse chez qui a choisi OpenAI ou Google.
+    consigne = (
+        "Tu produis une fiche de synthèse à usage interne, destinée à l'équipe "
+        "d'une entreprise. Réponds en français, en texte brut, sans markdown.\n\n"
+        "Structure imposée, exactement ces quatre sections :\n"
+        "DEMANDE : ce que le client veut, en une ou deux phrases.\n"
+        "ÉLÉMENTS RECUEILLIS : la liste des informations déjà obtenues "
+        "(nom, date, produit, quantité…), une par ligne.\n"
+        "MANQUANTS : ce qu'il reste à obtenir pour conclure, une par ligne. "
+        "Écris « rien » si le dossier est complet.\n"
+        "À FAIRE : l'action concrète attendue de l'équipe, en une phrase.\n\n"
+        "N'invente rien. Si une information est absente, ne la déduis pas."
+    )
+
+    async def _aucun_outil(nom: str, arguments: dict) -> str:  # pragma: no cover
+        return "Aucun outil disponible pour la synthèse."
+
     try:
-        reponse = await client.messages.create(
-            model=MODELE,
-            max_tokens=1024,
-            system=(
-                "Tu produis une fiche de synthèse à usage interne, destinée à l'équipe "
-                "d'une entreprise. Réponds en français, en texte brut, sans markdown.\n\n"
-                "Structure imposée, exactement ces quatre sections :\n"
-                "DEMANDE : ce que le client veut, en une ou deux phrases.\n"
-                "ÉLÉMENTS RECUEILLIS : la liste des informations déjà obtenues "
-                "(nom, date, produit, quantité…), une par ligne.\n"
-                "MANQUANTS : ce qu'il reste à obtenir pour conclure, une par ligne. "
-                "Écris « rien » si le dossier est complet.\n"
-                "À FAIRE : l'action concrète attendue de l'équipe, en une phrase.\n\n"
-                "N'invente rien. Si une information est absente, ne la déduis pas."
-            ),
-            messages=[{"role": "user", "content": transcription}],
+        bilan = await client_llm().converser(
+            systeme=consigne,
+            historique=[],
+            message=transcription,
+            outils=[],
+            executer=_aucun_outil,
+            max_tours=1,
         )
     except Exception as e:  # noqa: BLE001
         logger.error(f"Fiche client impossible : {e}")
         raise HTTPException(502, "La synthèse a échoué")
 
-    texte = "\n".join(b.text for b in reponse.content if getattr(b, "type", None) == "text")
+    texte = bilan.texte
     return {
         "identifiant": identifiant,
         "affichage": masquer_identifiant(identifiant),

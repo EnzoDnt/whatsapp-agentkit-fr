@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import secrets
 import os
 import time
 from collections import defaultdict, deque
@@ -32,7 +33,14 @@ LOGUER_CONTENU = os.getenv("LOG_MESSAGE_CONTENT", "false").strip().lower() == "t
 # en quelques secondes (l'espace des numéros français fait 10^9, c'est trivial).
 _SEL = os.getenv("PII_HASH_SALT", "").strip()
 if not _SEL:
-    _SEL = "agentkit-sel-par-defaut"
+    # Sel de repli tiré au sort à chaque démarrage, plutôt qu'une constante
+    # publiée avec le dépôt. Avec une constante connue, « masquer » un numéro
+    # français ne coûtait rien à annuler : 10^9 possibilités se parcourent en
+    # quelques secondes, et le masquage ne protégeait plus personne.
+    # Contrepartie : l'empreinte d'un même numéro change d'un démarrage à
+    # l'autre. C'est pourquoi PII_HASH_SALT doit être renseigné en ligne — la
+    # revue de configuration le réclame au démarrage.
+    _SEL = secrets.token_hex(16)
 
 
 def masquer_telephone(telephone: str) -> str:
@@ -153,12 +161,8 @@ class LimiteurDebit:
 
 # ── Plafond de dépense ───────────────────────────────────────────────────
 
-# Tarifs API en dollars par million de tokens (entrée, sortie).
-TARIFS = {
-    "claude-opus-5": (5.0, 25.0),
-    "claude-sonnet-5": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-}
+# Les tarifs vivent dans llm.py, qui couvre tous les fournisseurs. Un second
+# tableau ici se serait désynchronisé du premier sans que rien ne le signale.
 
 
 @dataclass

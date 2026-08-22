@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 
 from fastapi import Request
 
+from agent.environnement import est_production
+
 
 @dataclass
 class MessageEntrant:
@@ -64,7 +66,14 @@ class FournisseurWhatsApp(ABC):
 
 
 def mode_developpement() -> bool:
-    return os.getenv("ENVIRONMENT", "development").strip().lower() != "production"
+    """
+    Tourne-t-on sur un poste de développement ?
+
+    S'appuie sur la détection d'hébergeur, et non sur la seule déclaration de
+    l'utilisateur : sinon un oubli d'ENVIRONMENT sur Coolify ou Railway suffisait
+    à rendre effective la dispense de signature ci-dessous, en pleine production.
+    """
+    return not est_production()
 
 
 def autoriser_webhook_non_signe() -> bool:
@@ -74,7 +83,7 @@ def autoriser_webhook_non_signe() -> bool:
     crédits Claude et faire parler le numéro professionnel du client.
 
     Ici il faut DEUX conditions explicites, et jamais en production :
-      ENVIRONMENT != production  ET  AUTORISER_WEBHOOK_NON_SIGNE=true
+      aucun hébergeur détecté  ET  AUTORISER_WEBHOOK_NON_SIGNE=true
     """
     if not mode_developpement():
         return False

@@ -40,8 +40,13 @@ from agent.securite import (
 
 load_dotenv()
 
-ENVIRONNEMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
-EST_PRODUCTION = ENVIRONNEMENT == "production"
+from agent.environnement import (  # noqa: E402
+    audit_configuration,
+    est_developpement_declare,
+    est_production,
+)
+
+ENVIRONNEMENT = "production" if est_production() else "development"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,16 +62,40 @@ logger = logging.getLogger("agentkit")
 # Un verrou par numéro : sur WhatsApp il est courant d'envoyer « bonjour » puis
 # la vraie question dans la foulée. Sans ça, les deux messages seraient traités
 # en parallèle, liraient le même historique et les écritures s'entremêleraient.
+#
+# Le dictionnaire est purgé : un verrou par correspondant, gardé à vie, c'est
+# une fuite de mémoire lente mais certaine — quelques dizaines d'octets par
+# client, indéfiniment. Sur un agent qui tourne un an, cela finit par compter.
 _verrous: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+LIMITE_VERROUS = 5000
+
+
+def _purger_verrous() -> None:
+    """Oublie les verrous libres quand le dictionnaire devient gros."""
+    if len(_verrous) <= LIMITE_VERROUS:
+        return
+    for cle in [c for c, v in list(_verrous.items()) if not v.locked()]:
+        del _verrous[cle]
 
 fournisseur = None
 erreur_configuration: str | None = None
 etat_fournisseur = {"ok": False, "detail": "non vérifié"}
+alertes_configuration: list[dict] = []
 
 
 @asynccontextmanager
 async def cycle_de_vie(app: FastAPI):
-    global fournisseur, erreur_configuration, etat_fournisseur
+    global fournisseur, erreur_configuration, etat_fournisseur, alertes_configuration
+
+    # Revue de configuration avant tout le reste. Une console ouverte à tous ou
+    # un historique qui s'efface à chaque déploiement ne lèvent aucune exception :
+    # sans ce contrôle, rien ne les signale avant que le mal soit fait.
+    alertes_configuration = audit_configuration()
+    for a in alertes_configuration:
+        ligne = f"[{a['gravite'].upper()}] {a['sujet']} — {a['explication']} → {a['remede']}"
+        (logger.error if a["gravite"] in ("critique", "haute") else logger.warning)(ligne)
+    if not alertes_configuration:
+        logger.info("Revue de configuration : rien à signaler")
 
     await initialiser_base()
     await nettoyer_evenements_anciens()
@@ -107,12 +136,25 @@ async def sante():
     """Point de santé pour l'hébergeur et le diagnostic."""
     if erreur_configuration:
         return {"statut": "erreur", "detail": erreur_configuration}
+
+    graves = [a for a in alertes_configuration if a["gravite"] in ("critique", "haute")]
+    if etat_fournisseur["ok"] and not graves:
+        statut = "ok"
+    elif graves:
+        statut = "a_corriger"
+    else:
+        statut = "degrade"
+
     return {
-        "statut": "ok" if etat_fournisseur["ok"] else "degrade",
+        "statut": statut,
         "fournisseur": fournisseur.nom if fournisseur else None,
         "connexion": etat_fournisseur,
         "environnement": ENVIRONNEMENT,
         "depense_du_jour_usd": depenses.depense_du_jour,
+        # Exposé à dessein : ce sont des noms de variables à renseigner, jamais
+        # leur valeur. C'est le seul endroit où la personne qui a déployé ira
+        # vraiment regarder.
+        "a_corriger": alertes_configuration,
     }
 
 
@@ -173,17 +215,25 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
             )
             continue
 
+        # Déduplication AVANT la limite de débit, et non l'inverse.
+        #
+        # Meta rejoue un événement jusqu'à sept fois tant qu'il n'a pas reçu son
+        # 2xx. Compter le débit d'abord faisait payer ces réessais au client :
+        # un seul message rejoué cinq fois consommait cinq jetons sur les vingt
+        # de sa fenêtre horaire, et il se retrouvait muselé sans avoir rien fait.
+        evenement_id = msg.contexte.get("evenement_id") or msg.message_id
+        if evenement_id and not await marquer_evenement_traite(evenement_id):
+            logger.info("Événement déjà traité, ignoré")
+            continue
+
         autorise, restants = limiteur.autoriser(msg.identifiant)
         if not autorise:
             logger.warning(
                 f"Limite de débit atteinte pour {masquer_identifiant(msg.identifiant, msg.par_bsuid)} : message ignoré"
             )
-            continue
-
-        # Livraison « au moins une fois » : le même événement peut arriver deux fois.
-        evenement_id = msg.contexte.get("evenement_id") or msg.message_id
-        if evenement_id and not await marquer_evenement_traite(evenement_id):
-            logger.info("Événement déjà traité, ignoré")
+            # L'événement a été marqué traité juste au-dessus : on le libère,
+            # sinon un réessai légitime serait écarté comme un doublon.
+            await liberer_evenement(evenement_id)
             continue
 
         logger.info(
@@ -191,6 +241,7 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
             f"{' (via username)' if msg.par_bsuid else ''} : {masquer_contenu(msg.texte)} "
             f"({restants} restants dans la fenêtre)"
         )
+        _purger_verrous()
         taches.add_task(traiter_message, msg)
         empiles += 1
 
@@ -279,9 +330,13 @@ async def traiter_message(msg: MessageEntrant) -> None:
 
 
 # ── Simulateur local ─────────────────────────────────────────────────────
-# Monté uniquement hors production : c'est un canal non authentifié.
+#
+# Canal SANS authentification : qui connaît l'URL peut injecter des messages et
+# consommer le crédit du modèle. Il se monte donc sur demande expresse
+# (ENVIRONMENT=development) et non « partout sauf en production », règle qui
+# l'ouvrait au moindre oubli de configuration.
 
-if not EST_PRODUCTION:
+if est_developpement_declare():
     from agent.providers.simulateur import file_sortante, payload_signe
 
     RACINE = Path(__file__).resolve().parent.parent

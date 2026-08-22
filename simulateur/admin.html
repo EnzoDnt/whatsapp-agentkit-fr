@@ -306,7 +306,11 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 'use strict';
 let vue='conversations', conv=null, enPause=false, docNom=null, brouillonId=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const esc=t=>String(t??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+// Échappe aussi ' et ` : les gabarits n'utilisent aujourd'hui que des attributs
+// entre guillemets doubles, mais un seul attribut écrit entre apostrophes plus
+// tard rouvrirait une injection, en silence.
+const esc=t=>String(t??'').replace(/[<>&"'`]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;',
+  '"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
 const dt=s=>s?new Date(s).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
 const mobile=()=>window.matchMedia('(max-width:900px)').matches;
 const api=(p,o={})=>fetch('/admin'+p,{...o,credentials:'same-origin',

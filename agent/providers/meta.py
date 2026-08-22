@@ -27,6 +27,12 @@ from agent.securite import masquer_telephone
 
 logger = logging.getLogger("agentkit")
 
+# WhatsApp refuse tout corps de message au-delà de 4096 caractères. Un modèle
+# bavard, ou un prompt système qui l'invite à détailler, dépasse ce seuil sans
+# prévenir : Meta rejette alors l'envoi et le client ne reçoit rien du tout.
+# Mieux vaut une réponse tronquée proprement qu'un silence.
+MAX_CARACTERES_WHATSAPP = 4096
+
 
 class FournisseurMeta(FournisseurWhatsApp):
     nom = "meta"
@@ -174,6 +180,14 @@ class FournisseurMeta(FournisseurWhatsApp):
         (Le champ `recipient` séparé n'existe que sur /marketing_messages.)
         """
         telephone = destinataire
+        if len(message) > MAX_CARACTERES_WHATSAPP:
+            logger.warning(
+                f"Réponse de {len(message)} caractères tronquée à {MAX_CARACTERES_WHATSAPP} : "
+                "WhatsApp aurait refusé l'envoi. Demandez des réponses plus courtes "
+                "dans le prompt système."
+            )
+            message = message[: MAX_CARACTERES_WHATSAPP - 1].rstrip() + "…"
+
         if not self.token or not self.phone_number_id:
             logger.error("Envoi impossible : META_ACCESS_TOKEN ou META_PHONE_NUMBER_ID manquant")
             return False

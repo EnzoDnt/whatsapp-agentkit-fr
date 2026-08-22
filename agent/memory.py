@@ -29,6 +29,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from agent.securite import masquer_telephone
 
 load_dotenv()
+from agent.environnement import est_production
+
 logger = logging.getLogger("agentkit")
 
 MAX_MESSAGES_HISTORIQUE = int(os.getenv("MAX_MESSAGES_HISTORIQUE", "20") or "20")
@@ -52,7 +54,7 @@ def _url_base() -> str:
 
 URL_BASE = _url_base()
 
-if URL_BASE.startswith("sqlite") and os.getenv("ENVIRONMENT", "").lower() == "production":
+if URL_BASE.startswith("sqlite") and est_production():
     logger.warning(
         "⚠️  SQLite en production : le disque du conteneur est éphémère. "
         "Chaque redéploiement effacera TOUT l'historique. Utilisez PostgreSQL."
