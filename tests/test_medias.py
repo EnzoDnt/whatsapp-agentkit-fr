@@ -412,6 +412,26 @@ class TestConsole:
         assert {c["id"] for c in d["colonnes"]} == set(medias.CAPACITES)
         assert len(d["lignes"]) == len(medias.TYPES_MEDIA)
 
+    def test_le_catalogue_de_modeles_est_protege(self, client):
+        assert client.get("/admin/medias/modeles?fournisseur=openai").status_code == 401
+
+    def test_un_fournisseur_inconnu_est_refuse(self, connecte, medias):
+        r = connecte.get("/admin/medias/modeles?fournisseur=nimportequoi")
+        assert r.status_code == 400
+
+    def test_le_catalogue_ne_renvoie_jamais_une_liste_vide(self, connecte, medias,
+                                                          monkeypatch):
+        """
+        Si l'API du fournisseur est injoignable, on retombe sur les valeurs par
+        défaut : l'utilisateur doit toujours pouvoir choisir quelque chose.
+        """
+        async def injoignable(*a, **k):
+            raise medias.httpx.HTTPError("réseau coupé")
+
+        monkeypatch.setattr(medias.httpx.AsyncClient, "get", injoignable, raising=False)
+        d = connecte.get("/admin/medias/modeles?fournisseur=openai&type_media=audio").json()
+        assert d["modeles"], "aucun modèle proposé alors que le repli devait s'appliquer"
+
     def test_enregistrer_un_choix_impossible_renvoie_400(self, connecte, medias):
         r = connecte.put("/admin/medias", json={"choix": {"audio": "anthropic"}})
         assert r.status_code == 400
@@ -419,7 +439,20 @@ class TestConsole:
     def test_enregistrer_l_escalade_fonctionne(self, connecte, medias):
         r = connecte.put("/admin/medias", json={"choix": {"video": "escalade"}})
         assert r.status_code == 200
-        assert r.json()["choix"]["video"] == "escalade"
+        assert r.json()["choix"]["video"]["fournisseur"] == "escalade"
+
+    def test_choisir_un_modele_precis(self, connecte, medias):
+        """Le modèle se choisit par type, pas seulement le fournisseur."""
+        r = connecte.put("/admin/medias", json={"choix": {
+            "audio": {"fournisseur": "openai", "modele": "gpt-4o-mini-transcribe"}}})
+        assert r.status_code == 200
+        assert medias.modele_pour("audio", "openai") == "gpt-4o-mini-transcribe"
+
+    def test_l_ancien_format_chaine_reste_lu(self, medias):
+        """Une configuration écrite par une version antérieure ne doit pas casser."""
+        medias.FICHIER_ROUTAGE.parent.mkdir(exist_ok=True)
+        medias.FICHIER_ROUTAGE.write_text("image: openai\n", encoding="utf-8")
+        assert medias.fournisseur_pour("image") == "openai"
 
 
 # ═════════════════════════════════════════════════════════════════════════

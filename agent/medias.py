@@ -145,17 +145,115 @@ def _defaut_env(type_media: str) -> str:
     return "escalade"
 
 
+def _entree(type_media: str) -> dict:
+    """
+    Ligne de routage d'un type, quel que soit le format enregistré.
+
+    Les premières versions écrivaient une simple chaîne (« openai ») ; on gère
+    les deux pour ne pas casser une configuration déjà en place.
+    """
+    brut = _routage_fichier().get(type_media)
+    if isinstance(brut, str):
+        return {"fournisseur": brut.strip().lower(), "modele": ""}
+    if isinstance(brut, dict):
+        return {
+            "fournisseur": str(brut.get("fournisseur", "")).strip().lower(),
+            "modele": str(brut.get("modele", "")).strip(),
+        }
+    return {"fournisseur": "", "modele": ""}
+
+
 def fournisseur_pour(type_media: str) -> str:
     """Fournisseur retenu pour ce type : console d'abord, puis .env."""
-    choix = str(_routage_fichier().get(type_media, "")).strip().lower()
-    return choix or _defaut_env(type_media)
+    return _entree(type_media)["fournisseur"] or _defaut_env(type_media)
 
 
 def modele_pour(type_media: str, fournisseur: str) -> str:
+    """Modèle retenu : console, puis .env, puis le défaut du fournisseur."""
+    choisi = _entree(type_media)["modele"]
+    if choisi:
+        return choisi
     explicite = os.getenv(f"MEDIA_{type_media.upper()}_MODELE", "").strip()
     if explicite:
         return explicite
     return MODELES_DEFAUT.get((type_media, fournisseur), "")
+
+
+# ── Modèles disponibles chez un fournisseur ──────────────────────────────
+#
+# Interrogés en direct plutôt que codés en dur : les catalogues bougent tous les
+# mois, et une liste figée dans le code proposerait des modèles retirés tout en
+# masquant les nouveaux.
+
+_URLS_MODELES = {
+    "openai": ("https://api.openai.com/v1/models", "bearer"),
+    "openrouter": ("https://openrouter.ai/api/v1/models", "bearer"),
+    "google": ("https://generativelanguage.googleapis.com/v1beta/models", "google"),
+    "anthropic": ("https://api.anthropic.com/v1/models", "anthropic"),
+}
+
+# Mots-clés servant à repérer les modèles pertinents pour chaque usage.
+_INDICES = {
+    "audio": ("transcribe", "whisper", "audio", "gemini"),
+    "image": ("gpt", "claude", "gemini", "vision", "vl", "kimi", "llama", "qwen", "mistral"),
+    "video": ("gemini",),
+    "document": ("gpt", "claude", "gemini", "vision", "kimi", "llama", "qwen", "mistral"),
+}
+
+
+async def modeles_disponibles(fournisseur: str, type_media: str = "") -> list[str]:
+    """
+    Catalogue du fournisseur, filtré sur ce qui a du sens pour ce type.
+
+    En cas d'échec (clé absente, réseau, API modifiée) on retombe sur le modèle
+    par défaut plutôt que de laisser une liste vide : l'utilisateur doit toujours
+    pouvoir choisir quelque chose.
+    """
+    entree = _URLS_MODELES.get(fournisseur)
+    cle = os.getenv(CLES.get(fournisseur, ""), "").strip()
+    secours = [m for (t, f), m in MODELES_DEFAUT.items() if f == fournisseur and (not type_media or t == type_media)]
+
+    if not entree or not cle:
+        return sorted(set(secours))
+
+    url, mode = entree
+    entetes: dict[str, str] = {"User-Agent": UA}
+    params: dict[str, str] = {}
+    if mode == "bearer":
+        entetes["Authorization"] = f"Bearer {cle}"
+    elif mode == "anthropic":
+        entetes["x-api-key"] = cle
+        entetes["anthropic-version"] = "2023-06-01"
+        params["limit"] = "100"
+    else:
+        params["key"] = cle
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url, headers=entetes, params=params)
+        if r.status_code != 200:
+            logger.info(f"Catalogue {fournisseur} indisponible ({r.status_code})")
+            return sorted(set(secours))
+        d = r.json()
+    except (httpx.HTTPError, ValueError) as e:
+        logger.info(f"Catalogue {fournisseur} injoignable : {e}")
+        return sorted(set(secours))
+
+    noms: list[str] = []
+    for item in d.get("data") or d.get("models") or []:
+        nom = item.get("id") or item.get("name") or ""
+        # Google préfixe ses identifiants par « models/ »
+        nom = nom.split("/", 1)[1] if nom.startswith("models/") else nom
+        if nom:
+            noms.append(nom)
+
+    if type_media:
+        indices = _INDICES.get(type_media, ())
+        filtres = [n for n in noms if any(i in n.lower() for i in indices)]
+        # Un filtre qui ne laisse rien serait pire que pas de filtre du tout.
+        noms = filtres or noms
+
+    return sorted(set(noms + secours))
 
 
 def tableau_routage() -> dict:
@@ -192,6 +290,7 @@ def tableau_routage() -> dict:
                 "type": t,
                 "libelle": LIBELLES[t],
                 "choix": fournisseur_pour(t),
+                "modele": modele_pour(t, fournisseur_pour(t)),
                 "cases": cases,
                 "actif": actif(t),
             }
@@ -200,17 +299,27 @@ def tableau_routage() -> dict:
 
 
 def enregistrer_routage(choix: dict) -> dict:
-    """Écrit le routage choisi depuis la console, en refusant l'impossible."""
+    """
+    Écrit le routage choisi depuis la console, en refusant l'impossible.
+
+    Chaque entrée accepte soit une chaîne (le fournisseur seul), soit
+    {"fournisseur": ..., "modele": ...}.
+    """
     propre = {}
-    for t, f in (choix or {}).items():
+    for t, valeur in (choix or {}).items():
         if t not in TYPES_MEDIA:
             continue
-        f = str(f).strip().lower()
+        if isinstance(valeur, dict):
+            f = str(valeur.get("fournisseur", "")).strip().lower()
+            modele = str(valeur.get("modele", "")).strip()
+        else:
+            f, modele = str(valeur).strip().lower(), ""
+
         if f != "escalade" and not possible(t, f):
             raise MediaIndisponible(
                 f"{f.capitalize()} ne peut pas traiter « {LIBELLES.get(t, t)} »."
             )
-        propre[t] = f
+        propre[t] = {"fournisseur": f, "modele": "" if f == "escalade" else modele}
 
     FICHIER_ROUTAGE.parent.mkdir(exist_ok=True)
     FICHIER_ROUTAGE.write_text(

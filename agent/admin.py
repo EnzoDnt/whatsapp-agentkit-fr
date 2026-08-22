@@ -213,6 +213,22 @@ async def lire_medias():
     return tableau_routage()
 
 
+@routeur.get("/medias/modeles", dependencies=[Depends(verifier_jeton)])
+async def lister_modeles(fournisseur: str, type_media: str = ""):
+    """
+    Catalogue d'un fournisseur, interrogé en direct.
+
+    Codé en dur, il proposerait des modèles retirés et masquerait les nouveaux :
+    les catalogues bougent tous les mois. En cas d'échec, la fonction retombe
+    sur les valeurs par défaut plutôt que de renvoyer une liste vide.
+    """
+    from agent.medias import CAPACITES, modeles_disponibles
+
+    if fournisseur not in CAPACITES:
+        raise HTTPException(400, f"Fournisseur inconnu : {fournisseur}")
+    return {"fournisseur": fournisseur, "modeles": await modeles_disponibles(fournisseur, type_media)}
+
+
 @routeur.put("/medias", dependencies=[Depends(verifier_jeton)])
 async def ecrire_medias(corps: dict):
     from agent.medias import MediaIndisponible, enregistrer_routage

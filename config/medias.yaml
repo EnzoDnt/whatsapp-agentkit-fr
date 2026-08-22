@@ -1,2 +1,3 @@
-audio: openai
-video: escalade
+image:
+  fournisseur: anthropic
+  modele: claude-opus-5

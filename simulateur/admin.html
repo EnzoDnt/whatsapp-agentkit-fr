@@ -94,6 +94,8 @@ nav .logo img{width:100%;height:100%;object-fit:cover}
 nav a{padding:9px 11px;border-radius:var(--r-ctl);color:var(--discret);text-decoration:none;
   display:flex;align-items:center;gap:10px;font-size:0.875rem;font-weight:500;
   transition:background var(--vif),color var(--vif);position:relative}
+nav a svg{width:19px;height:19px;flex:none;opacity:.85}
+nav a[aria-current=page] svg{opacity:1}
 nav a:hover{background:var(--creux);color:var(--texte)}
 nav a[aria-current=page]{background:var(--accent-surf);color:var(--accent);font-weight:600}
 nav a .n{margin-left:auto;font-size:0.6875rem;font-weight:700;background:var(--accent);
@@ -112,6 +114,34 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .vide{margin:auto;text-align:center;color:var(--discret);padding:var(--e6) var(--e4);
   max-width:38ch;line-height:1.7}
 .vide .gl{font-size:1.75rem;display:block;margin-bottom:var(--e2);opacity:.6}
+/* ── Sous-onglets des réglages ──────────────────────────────────── */
+.sous-onglets{display:flex;gap:2px;padding:0 var(--e3);border-bottom:1px solid var(--bord);
+  background:var(--surface);overflow-x:auto}
+.sous-onglets button{background:none;border:none;border-bottom:2px solid transparent;
+  padding:11px 14px;font-size:0.875rem;font-weight:500;color:var(--discret);cursor:pointer;
+  white-space:nowrap;transition:color var(--vif),border-color var(--vif);min-height:0}
+.sous-onglets button:hover{color:var(--texte)}
+.sous-onglets button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);
+  font-weight:600}
+.panneau[hidden]{display:none!important}
+
+/* ── Petite aide contextuelle ───────────────────────────────────── */
+.aide{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;
+  border-radius:50%;border:1px solid var(--bord-fort);color:var(--tenu);font-size:0.625rem;
+  font-weight:700;font-style:normal;cursor:help;position:relative;margin-left:6px;
+  vertical-align:middle;flex:none;background:var(--surface)}
+.aide:hover,.aide:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+.aide .bulle{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  width:max-content;max-width:min(320px,70vw);background:var(--texte);color:var(--surface);
+  font-size:0.75rem;font-weight:400;line-height:1.5;padding:9px 11px;border-radius:var(--r2);
+  text-align:left;opacity:0;visibility:hidden;transition:opacity var(--vif);z-index:40;
+  box-shadow:var(--ombre-forte);pointer-events:none;letter-spacing:0}
+.aide .bulle::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:var(--texte)}
+.aide:hover .bulle,.aide:focus-visible .bulle{opacity:1;visibility:visible}
+@media (max-width:600px){.aide .bulle{left:auto;right:-8px;transform:none}
+  .aide .bulle::after{left:auto;right:12px;transform:none}}
+
 /* ── Tableau des fichiers reçus ─────────────────────────────────── */
 .tmed-enveloppe{overflow-x:auto;border:1px solid var(--bord);border-radius:var(--r2)}
 table.tmed{border-collapse:collapse;width:100%;min-width:620px;font-size:0.875rem}
@@ -119,6 +149,10 @@ table.tmed th,table.tmed td{padding:var(--e2) var(--e2);text-align:center;border
 table.tmed thead th{font-size:0.75rem;font-weight:600;color:var(--tex-dis);text-transform:uppercase;letter-spacing:.05em}
 table.tmed tbody tr:last-child td{border-bottom:none}
 table.tmed td.type,table.tmed th.type{text-align:left;font-weight:500;color:var(--tex);min-width:190px}
+table.tmed td.col-modele,table.tmed th.col-modele{text-align:left;min-width:190px;
+  border-left:1px solid var(--bord)}
+.sel-modele{width:100%;font-size:0.8125rem;padding:5px 7px;min-height:0}
+.sel-modele:disabled{opacity:.45}
 table.tmed td.type small{display:block;font-weight:400;color:var(--tex-dis);font-size:0.75rem;margin-top:2px}
 th.hors{color:var(--tex-dis)}
 th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0;font-size:0.7rem}
@@ -178,6 +212,7 @@ th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0
   nav a{flex-direction:column;gap:3px;font-size:0.6875rem;padding:9px 6px;min-width:64px;
     flex:1;justify-content:center;min-height:52px;border-radius:0}
   nav a .n{position:absolute;top:4px;right:calc(50% - 20px);margin:0}
+  nav a svg{width:21px;height:21px}
   main{order:1;min-height:0}
   .duo{flex-direction:column}
   .colonne{width:100%;border-right:none;max-height:none;
@@ -208,13 +243,12 @@ th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0
     <div style="min-width:0"><div style="font-weight:600;font-size:0.875rem;overflow:hidden;
       text-overflow:ellipsis;white-space:nowrap" id="nom-espace">Votre agent</div>
       <div class="ptt ten" id="etat-agent">—</div></div></div>
-  <a href="#" data-vue="conversations" aria-current="page">💬 Conversations</a>
-  <a href="#" data-vue="valider">✅ À valider <span class="n" id="n-valider" hidden>0</span></a>
-  <a href="#" data-vue="demandes">📋 Demandes</a>
-  <a href="#" data-vue="consignes">📌 Consignes</a>
-  <a href="#" data-vue="documents">📁 Documents</a>
-  <a href="#" data-vue="fichiers">📎 Fichiers reçus</a>
-  <a href="#" data-vue="reglages">⚙️ Réglages</a>
+  <a href="#" data-vue="conversations" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.8-.8L3 21l1.9-5a8.4 8.4 0 0 1-.9-3.9 8.4 8.4 0 0 1 8.5-8.4h.5a8.4 8.4 0 0 1 8 8v.3z"/></svg><span>Conversations</span></a>
+  <a href="#" data-vue="valider"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>À valider</span> <span class="n" id="n-valider" hidden>0</span></a>
+  <a href="#" data-vue="demandes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg><span>Demandes</span></a>
+  <a href="#" data-vue="consignes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5l2.6 3.4a1 1 0 0 1-.8 1.6H7.2a1 1 0 0 1-.8-1.6L9 10z"/></svg><span>Consignes</span></a>
+  <a href="#" data-vue="documents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V11"/><path d="M13 3v6a1 1 0 0 0 1 1h6"/><path d="M13 3l8 8"/></svg><span>Documents</span></a>
+  <a href="#" data-vue="reglages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg><span>Réglages</span></a>
   <div class="pied">
     <div id="qui">—</div>
     <button class="q ptt" data-act="deconnexion" style="padding:4px 0;min-height:0;margin-top:4px">Se déconnecter</button>
@@ -299,34 +333,65 @@ th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0
   </section>
 
   <!-- RÉGLAGES -->
-  <section class="vue" aria-hidden="true" id="v-fichiers">
-    <div class="barre"><h2>Fichiers reçus</h2>
-      <div class="outils"><button class="p" data-act="save-medias">Enregistrer</button></div></div>
-    <div class="corps">
-      <p class="dis pt" style="margin:0 0 var(--e3);max-width:70ch">
-        Quand un client envoie un fichier, choisissez le service qui le lit. Les cases grisées
-        ne sont pas disponibles&nbsp;: soit le service ne sait pas lire ce type de fichier, soit sa
-        clé n'est pas renseignée. Passez le curseur dessus pour savoir pourquoi.</p>
-      <div id="tab-medias"></div>
-      <div id="medias-avis" style="margin-top:var(--e3)"></div>
-    </div>
-  </section>
-
   <section class="vue" aria-hidden="true" id="v-reglages">
-    <div class="barre"><h2>Comportement de l'agent</h2>
-      <div class="outils"><button class="p" data-act="save-prompt">Enregistrer</button></div></div>
-    <div class="corps" style="max-width:78ch">
-      <p class="dis pt" style="margin:0 0 var(--e3)">
-        Qui est votre agent, ce qu'il sait faire, comment il s'exprime. Une sauvegarde est
-        conservée à chaque enregistrement.</p>
-      <label for="sys">Instructions principales</label>
-      <textarea id="sys" rows="20"></textarea>
-      <div class="duo-champs" style="margin-top:var(--e3)">
-        <div><label for="m-fb">Quand il n'a pas compris</label><input id="m-fb"></div>
-        <div><label for="m-er">En cas de panne technique</label><input id="m-er"></div>
+    <div class="barre"><h2>Réglages</h2>
+      <div class="outils"><button class="p" data-act="save-reglages">Enregistrer</button></div></div>
+
+    <div class="sous-onglets" role="tablist" aria-label="Sections des réglages">
+      <button role="tab" data-sous="comportement" aria-selected="true">Comportement de l'agent</button>
+      <button role="tab" data-sous="fichiers" aria-selected="false">Fichiers reçus</button>
+    </div>
+
+    <div class="corps">
+      <!-- Comportement -->
+      <div class="panneau" id="p-comportement" style="max-width:78ch">
+        <p class="dis pt" style="margin:0 0 var(--e3)">
+          Qui est votre agent, ce qu'il sait faire, comment il s'exprime. Une sauvegarde est
+          conservée à chaque enregistrement.</p>
+
+        <label for="sys">Instructions principales
+          <i class="aide" tabindex="0" role="note">i<span class="bulle">Le cœur du comportement
+            de l'agent : son identité, son ton, ce qu'il sait de votre activité et ce qu'il ne
+            doit jamais faire. Envoyé au modèle à chaque message reçu.</span></i></label>
+        <textarea id="sys" rows="18"></textarea>
+
+        <div style="margin-top:var(--e4)">
+          <label for="m-fb">Quand il n'a pas compris
+            <i class="aide" tabindex="0" role="note">i<span class="bulle">Envoyé quand le message
+              du client est vide ou trop court pour être exploitable, ou quand le modèle ne
+              renvoie aucun texte. Ce n'est pas un message d'erreur : l'agent fonctionne, il
+              demande simplement de reformuler.</span></i></label>
+          <textarea id="m-fb" rows="2"></textarea>
+        </div>
+
+        <div style="margin-top:var(--e3)">
+          <label for="m-er">En cas de panne technique
+            <i class="aide" tabindex="0" role="note">i<span class="bulle">Envoyé quand l'agent
+              n'arrive pas à joindre le service d'intelligence artificielle — clé invalide,
+              panne du fournisseur, réseau coupé. Le client reçoit ce message plutôt que rien,
+              et la conversation reste visible ici pour qu'un humain reprenne la main.</span></i></label>
+          <textarea id="m-er" rows="2"></textarea>
+        </div>
+
+        <div style="margin-top:var(--e3)">
+          <label for="m-qu">Limite quotidienne atteinte
+            <i class="aide" tabindex="0" role="note">i<span class="bulle">Envoyé quand le plafond
+              de dépense du jour est atteint : l'agent cesse alors d'appeler le modèle jusqu'à
+              minuit. C'est un garde-fou contre une facture qui s'emballe. Annoncez qu'un humain
+              prendra le relais.</span></i></label>
+          <textarea id="m-qu" rows="2"></textarea>
+        </div>
       </div>
-      <div style="margin-top:var(--e3)"><label for="m-qu">Limite quotidienne atteinte</label>
-        <input id="m-qu"></div>
+
+      <!-- Fichiers reçus -->
+      <div class="panneau" id="p-fichiers" hidden>
+        <p class="dis pt" style="margin:0 0 var(--e3);max-width:70ch">
+          Quand un client envoie un fichier, choisissez le service qui le lit. Les cases grisées
+          ne sont pas disponibles&nbsp;: soit le service ne sait pas lire ce type de fichier, soit
+          sa clé n'est pas renseignée. Passez le curseur dessus pour savoir pourquoi.</p>
+        <div id="tab-medias"></div>
+        <div id="medias-avis" style="margin-top:var(--e3)"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -434,7 +499,23 @@ function aller(v){
   charger();
 }
 function charger(){({conversations:chargerConv,valider:chargerValider,demandes:chargerDem,
-  consignes:chargerCons,documents:chargerDoc,fichiers:chargerMedias,reglages:chargerPrompt})[vue]();}
+  consignes:chargerCons,documents:chargerDoc,reglages:chargerReglages})[vue]();}
+
+// Sous-onglets des réglages. Le contenu « Fichiers reçus » n'est chargé qu'à
+// l'ouverture de son onglet : inutile d'interroger le serveur pour un panneau
+// que la plupart des visites ne regardent pas.
+let sousVue='comportement';
+function allerSous(nom){
+  sousVue=nom;
+  $$('.sous-onglets button').forEach(b=>b.setAttribute('aria-selected',b.dataset.sous===nom));
+  $('#p-comportement').hidden = nom!=='comportement';
+  $('#p-fichiers').hidden = nom!=='fichiers';
+  if(nom==='fichiers')chargerMedias();
+}
+async function chargerReglages(){
+  await chargerPrompt();
+  if(sousVue==='fichiers')chargerMedias();
+}
 
 // ── Conversations ───────────────────────────────────────────────────────
 async function chargerConv(){
@@ -581,9 +662,10 @@ async function chargerCons(){
 }
 async function chargerMedias(){
   const d=await jget('/medias');
+  medConf=d;
   const cols=d.colonnes;
   const entete=cols.map(c=>`<th>${esc(c.nom)}${c.connecte?'':`
-    <small class="dis" style="display:block;font-weight:400;text-transform:none;letter-spacing:0">non connecté</small>`}</th>`).join('');
+    <small>non connecté</small>`}</th>`).join('');
   const lignes=d.lignes.map(l=>{
     const cases=l.cases.map(c=>{
       const dispo=c.possible;
@@ -591,30 +673,78 @@ async function chargerMedias(){
         <input type="radio" name="med-${esc(l.type)}" value="${esc(c.fournisseur)}"
           ${l.choix===c.fournisseur?'checked':''} ${dispo?'':'disabled'}></label></td>`;
     }).join('');
-    return `<tr>
+    return `<tr data-ligne="${esc(l.type)}">
       <td class="type">${esc(l.libelle)}<small>${l.actif?'lu automatiquement':'transmis à un humain'}</small></td>
       ${cases}
       <td class="esc-col"><label class="cell-med"
         title="L'agent ne répond pas lui-même : la conversation bascule vers votre équipe, qui consulte le fichier dans WhatsApp et répond à la main.">
         <input type="radio" name="med-${esc(l.type)}" value="escalade"
           ${l.choix==='escalade'?'checked':''}></label></td>
+      <td class="col-modele"><select class="sel-modele" data-pour="${esc(l.type)}"
+        aria-label="Modèle pour ${esc(l.libelle)}"></select></td>
     </tr>`;
   }).join('');
   $('#tab-medias').innerHTML=`<div class="tmed-enveloppe"><table class="tmed">
     <thead><tr><th class="type">Type de fichier</th>${entete}
-      <th class="hors esc-col">Escalade<small>vers un humain</small></th></tr></thead>
+      <th class="hors esc-col">Escalade<small>vers un humain</small></th>
+      <th class="hors col-modele">Modèle<small>chargé depuis le service</small></th></tr></thead>
     <tbody>${lignes}</tbody></table></div>`;
+
+  // Les catalogues sont chargés en parallèle : quatre requêtes séquentielles
+  // rendraient l'ouverture de l'onglet inutilement lente.
+  await Promise.all(d.lignes.map(l=>remplirModeles(l.type,l.choix,l.modele)));
 }
+
+// Catalogue d'un service, demandé au serveur qui l'interroge en direct.
+// Mis en cache par (service, type) : rebasculer entre deux options ne
+// redéclenche pas d'appel réseau.
+const cacheModeles={};
+let medConf=null;
+
+async function remplirModeles(type,fournisseur,choisi){
+  const sel=$(`select[data-pour="${type}"]`); if(!sel)return;
+  if(fournisseur==='escalade'){
+    sel.innerHTML='<option value="">—</option>';
+    sel.disabled=true;return;
+  }
+  sel.disabled=true;
+  sel.innerHTML='<option>chargement…</option>';
+  const cle=fournisseur+'|'+type;
+  try{
+    if(!cacheModeles[cle]){
+      const d=await jget(`/medias/modeles?fournisseur=${encodeURIComponent(fournisseur)}`
+        +`&type_media=${encodeURIComponent(type)}`);
+      cacheModeles[cle]=d.modeles||[];
+    }
+    const liste=cacheModeles[cle];
+    // Le modèle actuellement retenu doit rester sélectionnable même si le
+    // catalogue ne le renvoie plus (modèle retiré, ou nom personnalisé).
+    const options=liste.includes(choisi)||!choisi?liste:[choisi,...liste];
+    sel.innerHTML=options.map(m=>
+      `<option value="${esc(m)}"${m===choisi?' selected':''}>${esc(m)}</option>`).join('')
+      ||'<option value="">aucun modèle</option>';
+    sel.disabled=false;
+  }catch(e){
+    sel.innerHTML=`<option value="${esc(choisi||'')}">${esc(choisi||'indisponible')}</option>`;
+    sel.disabled=false;
+  }
+}
+
 async function enregistrerMedias(){
   const choix={};
-  $$('#tab-medias input[type=radio]:checked').forEach(r=>{choix[r.name.slice(4)]=r.value;});
+  $$('#tab-medias input[type=radio]:checked').forEach(r=>{
+    const type=r.name.slice(4);
+    const sel=$(`select[data-pour="${type}"]`);
+    choix[type]={fournisseur:r.value,modele:(sel&&!sel.disabled?sel.value:'')||''};
+  });
   try{
     const r=await api('/medias',{method:'PUT',body:JSON.stringify({choix})});
     const j=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(j.detail||'Erreur '+r.status);
     avis($('#medias-avis'),'Enregistré. Les prochains fichiers suivront ces règles.','ok');
     chargerMedias();
-  }catch(e){avis($('#medias-avis'),e.message);}
+    return true;
+  }catch(e){avis($('#medias-avis'),e.message);return false;}
 }
 async function chargerDoc(){
   const d=await jget('/documents');
@@ -656,11 +786,21 @@ async function editerDoc(nom){
 }
 
 // ── Délégation d'événements ─────────────────────────────────────────────
+// Changer de service pour un type de fichier recharge son catalogue.
+document.addEventListener('change',ev=>{
+  const r=ev.target.closest('#tab-medias input[type=radio]');
+  if(!r)return;
+  const type=r.name.slice(4);
+  const ligne=medConf&&medConf.lignes.find(l=>l.type===type);
+  remplirModeles(type,r.value,ligne&&r.value===ligne.choix?ligne.modele:'');
+});
+
 document.addEventListener('click',async ev=>{
-  const t=ev.target.closest('[data-act],[data-vue],[data-conv],[data-dem],[data-cons],[data-cons-suppr],[data-doc],[data-doc-suppr],[data-valider],[data-ignorer]');
+  const t=ev.target.closest('[data-act],[data-vue],[data-sous],[data-conv],[data-dem],[data-cons],[data-cons-suppr],[data-doc],[data-doc-suppr],[data-valider],[data-ignorer]');
   if(!t)return; const a=t.dataset;
   try{
     if(a.vue!==undefined){ev.preventDefault();aller(a.vue);return;}
+    if(a.sous!==undefined){ev.preventDefault();allerSous(a.sous);return;}
     if(a.conv!==undefined){await ouvrir(a.conv);return;}
     if(a.dem!==undefined){await api('/demandes/'+a.dem,{method:'PATCH',body:JSON.stringify({statut:a.st})});chargerDem();return;}
     if(a.cons!==undefined){await api('/consignes/'+a.cons,{method:'PATCH',body:JSON.stringify({activee:a.on==='1'})});chargerCons();return;}
@@ -729,19 +869,19 @@ document.addEventListener('click',async ev=>{
         if(r.ok){fermer();chargerDoc();}
         else avis($('#d-err'),(await r.json().catch(()=>({}))).detail||'Erreur');
         break;}
-      case 'save-medias':{
+      case 'save-reglages':{
+        // Un seul bouton : il enregistre le panneau actuellement affiché.
         const b=t;b.disabled=true;b.textContent='Enregistrement…';
-        await enregistrerMedias();
-        b.disabled=false;b.textContent='Enregistré ✓';
-        setTimeout(()=>b.textContent='Enregistrer',2200);
-        break;}
-      case 'save-prompt':{
-        const b=t;b.disabled=true;b.textContent='Enregistrement…';
-        const r=await api('/prompts',{method:'PUT',body:JSON.stringify({
-          system_prompt:$('#sys').value,fallback_message:$('#m-fb').value,
-          error_message:$('#m-er').value,quota_message:$('#m-qu').value})});
-        b.disabled=false;b.textContent=r.ok?'Enregistré ✓':'Enregistrer';
-        if(!r.ok)alert('Erreur : '+((await r.json().catch(()=>({}))).detail||r.status));
+        let ok=true;
+        if(sousVue==='fichiers'){ok=await enregistrerMedias();}
+        else{
+          const r=await api('/prompts',{method:'PUT',body:JSON.stringify({
+            system_prompt:$('#sys').value,fallback_message:$('#m-fb').value,
+            error_message:$('#m-er').value,quota_message:$('#m-qu').value})});
+          ok=r.ok;
+          if(!r.ok)alert('Erreur : '+((await r.json().catch(()=>({}))).detail||r.status));
+        }
+        b.disabled=false;b.textContent=ok?'Enregistré ✓':'Enregistrer';
         setTimeout(()=>b.textContent='Enregistrer',2200);
         break;}
     }
