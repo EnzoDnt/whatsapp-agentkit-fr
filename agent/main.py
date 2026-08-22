@@ -194,7 +194,9 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
 
     empiles = 0
     for msg in messages:
-        if msg.est_sortant or not msg.texte.strip():
+        # Un média arrive avec un texte vide : il ne doit pas être écarté ici,
+        # son contenu sera produit plus tard par medias.py.
+        if msg.est_sortant or not (msg.texte.strip() or msg.a_un_media):
             continue
 
         # Garde-fou de test : sur un numéro déjà en production, on ne veut pas
@@ -239,6 +241,46 @@ async def reception_webhook(request: Request, taches: BackgroundTasks):
     return {"statut": "ok", "empiles": empiles}
 
 
+async def _convertir_media(msg: MessageEntrant) -> bool:
+    """
+    Remplace le texte du message par le contenu du média.
+
+    Retourne False si le média n'a pas pu être exploité : le message du client
+    est alors enregistré, une escalade est créée pour qu'un humain prenne le
+    relais, et l'agent se tait plutôt que d'improviser sur un fichier qu'il n'a
+    pas lu.
+    """
+    from agent.medias import MediaIndisponible, convertir_en_texte
+
+    try:
+        msg.texte = await convertir_en_texte(msg)
+        return True
+    except MediaIndisponible as e:
+        motif = str(e)
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"Média illisible : {e}")
+        motif = "Le fichier n'a pas pu être traité (erreur technique)."
+
+    logger.info(f"Média non traité, escalade vers un humain : {motif}")
+
+    trace = f"[{msg.type_media or 'fichier'} reçu, non traité automatiquement]"
+    if msg.legende:
+        trace += f" {msg.legende}"
+    await enregistrer_message(msg.identifiant, "user", trace)
+
+    await enregistrer_escalade(
+        identifiant=msg.identifiant,
+        motif=f"Fichier reçu que l'agent ne peut pas lire — {motif}",
+        question_equipe="Ouvrez la conversation WhatsApp pour consulter le fichier, "
+                        "puis répondez au client.",
+        urgence="normale",
+    )
+    # L'agent se met en retrait sur cette conversation : sans ça il répondrait
+    # au message suivant comme si de rien n'était, alors qu'un humain a la main.
+    await basculer_pause_conversation(msg.identifiant, True)
+    return False
+
+
 async def traiter_message(msg: MessageEntrant) -> None:
     """Génère la réponse et la renvoie. S'exécute hors du cycle du webhook."""
     evenement_id = msg.contexte.get("evenement_id") or msg.message_id
@@ -263,6 +305,13 @@ async def traiter_message(msg: MessageEntrant) -> None:
                 username=msg.username,
                 pays=msg.contexte.get("pays", ""),
             )
+            # Un média est converti en texte AVANT tout le reste. En cas
+            # d'échec, on escalade vers un humain plutôt que de laisser le
+            # client sans réponse — c'est le seul comportement acceptable.
+            if msg.a_un_media:
+                if not await _convertir_media(msg):
+                    return
+
             historique = await obtenir_historique(msg.identifiant)
             reponse, vraie_reponse = await generer_reponse(
                 msg.texte, historique, telephone=msg.identifiant

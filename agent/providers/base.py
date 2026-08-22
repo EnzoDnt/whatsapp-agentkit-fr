@@ -31,6 +31,21 @@ class MessageEntrant:
     username: str = ""       # @pseudo, si le client en a adopté un
     contexte: dict = field(default_factory=dict)
 
+    # ── Média joint ──────────────────────────────────────────────────────
+    # "texte" reste la charge utile que verra le modèle : pour un média, il est
+    # rempli plus tard par la transcription ou la description (voir medias.py).
+    type_media: str = ""     # "" | audio | image | video | document | autre
+    media_id: str = ""       # identifiant Meta — la SEULE référence à conserver
+    mime_type: str = ""
+    media_url: str = ""      # URL fournie par le webhook : périssable, 5 minutes
+    legende: str = ""        # caption : porte souvent l'intention réelle
+    nom_fichier: str = ""    # documents uniquement
+    est_vocal: bool = False  # note vocale (micro) vs fichier audio joint
+
+    @property
+    def a_un_media(self) -> bool:
+        return bool(self.type_media)
+
     @property
     def telephone(self) -> str:
         """Compatibilité : ancien nom du champ."""

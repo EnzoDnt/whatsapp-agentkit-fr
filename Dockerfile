@@ -10,6 +10,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# ffmpeg : convertit les notes vocales WhatsApp (Ogg/Opus) en WAV 16 kHz mono
+# avant transcription. Les fournisseurs listent « audio/ogg » sans jamais
+# confirmer Opus — transcoder supprime toute une classe de pannes silencieuses.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Les dépendances avant le code : tant que requirements.txt ne bouge pas, cette
 # couche est réutilisée et les redéploiements prennent quelques secondes.
 COPY requirements.txt .

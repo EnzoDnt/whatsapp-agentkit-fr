@@ -73,6 +73,7 @@ gauche.
 | Consulter la doc Meta à jour | MCP `devtools_discovery` (aucune permission requise) |
 | Installer Python, créer le venv, installer les dépendances | `uv` / `python3` |
 | Se procurer le numéro dédié WhatsApp (VoIP OVHcloud ou SIM) | 🔴 manuel — voir `SETUP-NUMERO.md` |
+| Régler quel service lit quel type de fichier | ✅ console → Fichiers reçus |
 | Poser le logo du client et écrire `config/marque.yaml` | édition de fichier |
 | Créer le dépôt privé de déploiement et le pousser | `gh repo create --private` |
 | Écrire le `.gitignore` du dépôt de déploiement | édition de fichier |
@@ -161,6 +162,51 @@ déjà dans `requirements.txt`. Changer de fournisseur n'est donc qu'une variabl
 **Vérification** : lance le simulateur et envoie un message. Une réponse
 cohérente = le fournisseur répond. Une erreur de configuration est explicite
 (clé vide, fournisseur inconnu, paquet manquant) et te dit quoi corriger.
+
+### Étape 1 ter — Les fichiers reçus (vocaux, photos, PDF, vidéos)
+
+**Pose la question, et annonce la limite avant qu'elle ne se découvre.** Sur
+WhatsApp les notes vocales sont un usage massif : un agent qui ne les traite pas
+laisse le client sans réponse, ce qui ressemble à une panne.
+
+> **Tes clients vont t'envoyer des notes vocales, des photos, parfois des PDF.
+> Veux-tu que l'agent les comprenne ?**
+>
+> Un point important : **Claude ne sait pas écouter l'audio.** Il lit très bien
+> le texte, les images et les PDF, mais pas les sons. Ce n'est pas une limite du
+> kit, c'est l'API d'Anthropic.
+>
+> Donc, selon ce que tu veux :
+>
+> - **Tout, avec une seule clé** → prends **Google (Gemini)**. Il gère l'audio,
+>   les images, les PDF **et la vidéo**, au tarif le plus bas.
+> - **Tout sauf la vidéo, une seule clé** → **OpenAI** convient très bien
+>   (transcription excellente).
+> - **Tu tiens à Claude pour la qualité de rédaction** → garde-le, et ajoute
+>   **une deuxième clé** (OpenAI ou Google) uniquement pour les vocaux. C'est
+>   parfaitement supporté : chaque type de fichier a son propre service.
+> - **Tu ne veux rien payer de plus** → les fichiers seront transmis à un humain,
+>   qui les consulte dans WhatsApp et répond lui-même. Le client n'est jamais
+>   ignoré.
+
+✅ **Tu fais** : écris les clés nécessaires dans le `.env`. Le routage se règle
+ensuite **depuis la console → « Fichiers reçus »** : un tableau où chaque type de
+fichier reçoit son service, les cases impossibles étant grisées avec leur raison.
+
+Ce que chaque service sait faire — utile pour répondre à ses questions :
+
+| | Audio | Image | PDF | Vidéo |
+|---|:-:|:-:|:-:|:-:|
+| **Anthropic** | ❌ | ✅ | ✅ | ❌ |
+| **OpenAI** | ✅ | ✅ | ✅ | ❌ |
+| **Google** | ✅ | ✅ | ✅ | ✅ |
+| **OpenRouter** | ❌ | ✅ | ❌ | ❌ |
+
+**Seul Google lit la vidéo.** Avec tout autre service, les vidéos partent en
+escalade — dis-le, plutôt que de le laisser découvrir.
+
+Un PDF scanné (une photo de devis, une ordonnance) est reconnu : le texte étant
+introuvable, le modèle bascule tout seul en lecture d'image pour faire l'OCR.
 
 ### Étape 2 — L'entretien métier
 

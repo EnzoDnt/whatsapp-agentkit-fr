@@ -13,3 +13,6 @@ asyncpg>=0.31.0
 # le paquet manquant ne pouvant plus s'ajouter après coup sans rebuild.
 # Inoffensif si vous restez sur Anthropic (le défaut).
 openai>=2.0.0,<4.0.0
+# Extraction du texte des PDF reçus. Si le PDF est un scan (aucun texte),
+# le relais est pris par le modèle de vision, qui fait l'OCR.
+pypdf>=6.0.0

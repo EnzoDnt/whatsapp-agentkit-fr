@@ -34,6 +34,47 @@ logger = logging.getLogger("agentkit")
 MAX_CARACTERES_WHATSAPP = 4096
 
 
+# Types de média que Meta livre avec un objet {id, mime_type, url, …}.
+# "sticker" est reconnu pour pouvoir l'escalader proprement plutôt que de le
+# laisser disparaître, mais il n'est pas traité.
+TYPES_MEDIA = ("audio", "image", "video", "document", "sticker")
+
+
+def _extraire_media(msg: dict, type_msg: str) -> dict | None:
+    """
+    Normalise l'objet média d'un message Meta.
+
+    Retourne None si le type est inconnu ou l'objet inexploitable : l'appelant
+    ignore alors le message plutôt que de fabriquer un média vide.
+
+    Note : depuis 2026 Meta fournit « url » directement dans le webhook, en plus
+    de « id ». Cette URL expire en 5 minutes — on la transporte pour gagner un
+    aller-retour quand elle est encore fraîche, mais « media_id » reste la seule
+    référence durable (voir medias.py).
+    """
+    if type_msg not in TYPES_MEDIA:
+        return None
+
+    objet = msg.get(type_msg) or {}
+    identifiant = (objet.get("id") or "").strip()
+    if not identifiant:
+        return None
+
+    # Un sticker est une image, mais sans intérêt pour un service client :
+    # on le marque « autre » pour qu'il parte en escalade sans traitement.
+    type_media = "autre" if type_msg == "sticker" else type_msg
+
+    return {
+        "type_media": type_media,
+        "media_id": identifiant,
+        "mime_type": (objet.get("mime_type") or "").strip(),
+        "media_url": (objet.get("url") or "").strip(),
+        "legende": (objet.get("caption") or "").strip(),
+        "nom_fichier": (objet.get("filename") or "").strip(),
+        "est_vocal": bool(objet.get("voice")),
+    }
+
+
 class FournisseurMeta(FournisseurWhatsApp):
     nom = "meta"
 
@@ -133,10 +174,18 @@ class FournisseurMeta(FournisseurWhatsApp):
                             profils[cle] = fiche
 
                 for msg in valeur.get("messages", []):
-                    if msg.get("type") != "text":
-                        # images, audio, documents : hors périmètre pour l'instant.
-                        logger.info(f"Message de type '{msg.get('type')}' ignoré")
-                        continue
+                    type_msg = msg.get("type") or ""
+
+                    # Un média n'est plus ignoré : on transporte de quoi le
+                    # récupérer, et medias.py le convertira en texte. Auparavant
+                    # tout ce qui n'était pas du texte tombait ici en silence —
+                    # le client envoyait une note vocale et n'avait aucune réponse.
+                    media = {}
+                    if type_msg != "text":
+                        media = _extraire_media(msg, type_msg)
+                        if media is None:
+                            logger.info(f"Message de type '{type_msg}' sans contenu exploitable : ignoré")
+                            continue
 
                     telephone = (msg.get("from") or "").strip()
                     bsuid = (msg.get("from_user_id") or "").strip()
@@ -156,6 +205,13 @@ class FournisseurMeta(FournisseurWhatsApp):
                             est_sortant=False,
                             par_bsuid=not telephone,
                             username=profils.get(identifiant, {}).get("username", ""),
+                            type_media=media.get("type_media", ""),
+                            media_id=media.get("media_id", ""),
+                            mime_type=media.get("mime_type", ""),
+                            media_url=media.get("media_url", ""),
+                            legende=media.get("legende", ""),
+                            nom_fichier=media.get("nom_fichier", ""),
+                            est_vocal=media.get("est_vocal", False),
                             contexte={
                                 "evenement_id": msg.get("id", ""),
                                 "bsuid": bsuid,

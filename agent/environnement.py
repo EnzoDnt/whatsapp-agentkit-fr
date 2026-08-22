@@ -108,6 +108,24 @@ def audit_configuration() -> list[dict]:
             "Ajoutez WHATSAPP_PROVIDER=meta dans vos variables, avec les clés Meta.",
         )
 
+    # Médias : un type routé vers un service incapable ou non connecté échoue
+    # au premier fichier reçu, silencieusement pour qui ne lit pas les journaux.
+    try:
+        from agent.medias import LIBELLES, TYPES_MEDIA, fournisseur_pour, possible
+
+        for type_media in TYPES_MEDIA:
+            choisi = fournisseur_pour(type_media)
+            if choisi != "escalade" and not possible(type_media, choisi):
+                signaler(
+                    "haute", f"Fichiers — {LIBELLES[type_media]}",
+                    f"Le service choisi ({choisi}) ne peut pas les traiter : capacité "
+                    "absente ou clé d'API manquante. Chaque fichier reçu partira en escalade.",
+                    "Console → Fichiers reçus : choisissez un service disponible, "
+                    "ou assumez l'escalade vers un humain.",
+                )
+    except Exception:  # noqa: BLE001 — la revue ne doit jamais bloquer le démarrage
+        pass
+
     if en_ligne and not os.getenv("SESSION_SECRET", "").strip():
         signaler(
             "critique", "SESSION_SECRET",

@@ -112,6 +112,22 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .vide{margin:auto;text-align:center;color:var(--discret);padding:var(--e6) var(--e4);
   max-width:38ch;line-height:1.7}
 .vide .gl{font-size:1.75rem;display:block;margin-bottom:var(--e2);opacity:.6}
+/* ── Tableau des fichiers reçus ─────────────────────────────────── */
+.tmed-enveloppe{overflow-x:auto;border:1px solid var(--bord);border-radius:var(--r2)}
+table.tmed{border-collapse:collapse;width:100%;min-width:620px;font-size:0.875rem}
+table.tmed th,table.tmed td{padding:var(--e2) var(--e2);text-align:center;border-bottom:1px solid var(--bord)}
+table.tmed thead th{font-size:0.75rem;font-weight:600;color:var(--tex-dis);text-transform:uppercase;letter-spacing:.05em}
+table.tmed tbody tr:last-child td{border-bottom:none}
+table.tmed td.type,table.tmed th.type{text-align:left;font-weight:500;color:var(--tex);min-width:190px}
+table.tmed td.type small{display:block;font-weight:400;color:var(--tex-dis);font-size:0.75rem;margin-top:2px}
+th.hors{color:var(--tex-dis)}
+th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0;font-size:0.7rem}
+.cell-med{display:flex;align-items:center;justify-content:center;min-height:30px}
+.cell-med input{width:17px;height:17px;accent-color:var(--acc);cursor:pointer;margin:0}
+.cell-med.gris{opacity:.32;cursor:not-allowed}
+.cell-med.gris input{cursor:not-allowed}
+.esc-col{background:var(--fond-2)}
+
 /* ── Conversations ── */
 .duo{display:flex;flex:1;min-height:0}
 .colonne{width:296px;flex:0 0 auto;overflow-y:auto;border-right:1px solid var(--bord);background:var(--surface)}
@@ -197,6 +213,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
   <a href="#" data-vue="demandes">📋 Demandes</a>
   <a href="#" data-vue="consignes">📌 Consignes</a>
   <a href="#" data-vue="documents">📁 Documents</a>
+  <a href="#" data-vue="fichiers">📎 Fichiers reçus</a>
   <a href="#" data-vue="reglages">⚙️ Réglages</a>
   <div class="pied">
     <div id="qui">—</div>
@@ -282,6 +299,19 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
   </section>
 
   <!-- RÉGLAGES -->
+  <section class="vue" aria-hidden="true" id="v-fichiers">
+    <div class="barre"><h2>Fichiers reçus</h2>
+      <div class="outils"><button class="p" data-act="save-medias">Enregistrer</button></div></div>
+    <div class="corps">
+      <p class="dis pt" style="margin:0 0 var(--e3);max-width:70ch">
+        Quand un client envoie un fichier, choisissez le service qui le lit. Les cases grisées
+        ne sont pas disponibles&nbsp;: soit le service ne sait pas lire ce type de fichier, soit sa
+        clé n'est pas renseignée. Passez le curseur dessus pour savoir pourquoi.</p>
+      <div id="tab-medias"></div>
+      <div id="medias-avis" style="margin-top:var(--e3)"></div>
+    </div>
+  </section>
+
   <section class="vue" aria-hidden="true" id="v-reglages">
     <div class="barre"><h2>Comportement de l'agent</h2>
       <div class="outils"><button class="p" data-act="save-prompt">Enregistrer</button></div></div>
@@ -404,7 +434,7 @@ function aller(v){
   charger();
 }
 function charger(){({conversations:chargerConv,valider:chargerValider,demandes:chargerDem,
-  consignes:chargerCons,documents:chargerDoc,reglages:chargerPrompt})[vue]();}
+  consignes:chargerCons,documents:chargerDoc,fichiers:chargerMedias,reglages:chargerPrompt})[vue]();}
 
 // ── Conversations ───────────────────────────────────────────────────────
 async function chargerConv(){
@@ -549,6 +579,43 @@ async function chargerCons(){
     </div>`}).join('')||`<div class="vide"><span class="gl">📌</span>
       Aucune consigne. Exemple : « plus de tarte au citron du 15 au 25 août, proposer le fondant ».</div>`;
 }
+async function chargerMedias(){
+  const d=await jget('/medias');
+  const cols=d.colonnes;
+  const entete=cols.map(c=>`<th>${esc(c.nom)}${c.connecte?'':`
+    <small class="dis" style="display:block;font-weight:400;text-transform:none;letter-spacing:0">non connecté</small>`}</th>`).join('');
+  const lignes=d.lignes.map(l=>{
+    const cases=l.cases.map(c=>{
+      const dispo=c.possible;
+      return `<td><label class="cell-med ${dispo?'':'gris'}"${c.raison?` title="${esc(c.raison)}"`:''}>
+        <input type="radio" name="med-${esc(l.type)}" value="${esc(c.fournisseur)}"
+          ${l.choix===c.fournisseur?'checked':''} ${dispo?'':'disabled'}></label></td>`;
+    }).join('');
+    return `<tr>
+      <td class="type">${esc(l.libelle)}<small>${l.actif?'lu automatiquement':'transmis à un humain'}</small></td>
+      ${cases}
+      <td class="esc-col"><label class="cell-med"
+        title="L'agent ne répond pas lui-même : la conversation bascule vers votre équipe, qui consulte le fichier dans WhatsApp et répond à la main.">
+        <input type="radio" name="med-${esc(l.type)}" value="escalade"
+          ${l.choix==='escalade'?'checked':''}></label></td>
+    </tr>`;
+  }).join('');
+  $('#tab-medias').innerHTML=`<div class="tmed-enveloppe"><table class="tmed">
+    <thead><tr><th class="type">Type de fichier</th>${entete}
+      <th class="hors esc-col">Escalade<small>vers un humain</small></th></tr></thead>
+    <tbody>${lignes}</tbody></table></div>`;
+}
+async function enregistrerMedias(){
+  const choix={};
+  $$('#tab-medias input[type=radio]:checked').forEach(r=>{choix[r.name.slice(4)]=r.value;});
+  try{
+    const r=await api('/medias',{method:'PUT',body:JSON.stringify({choix})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.detail||'Erreur '+r.status);
+    avis($('#medias-avis'),'Enregistré. Les prochains fichiers suivront ces règles.','ok');
+    chargerMedias();
+  }catch(e){avis($('#medias-avis'),e.message);}
+}
 async function chargerDoc(){
   const d=await jget('/documents');
   $('#liste-doc').innerHTML=d.documents.map(f=>`
@@ -661,6 +728,12 @@ document.addEventListener('click',async ev=>{
           body:JSON.stringify({contenu:$('#d-txt').value})});
         if(r.ok){fermer();chargerDoc();}
         else avis($('#d-err'),(await r.json().catch(()=>({}))).detail||'Erreur');
+        break;}
+      case 'save-medias':{
+        const b=t;b.disabled=true;b.textContent='Enregistrement…';
+        await enregistrerMedias();
+        b.disabled=false;b.textContent='Enregistré ✓';
+        setTimeout(()=>b.textContent='Enregistrer',2200);
         break;}
       case 'save-prompt':{
         const b=t;b.disabled=true;b.textContent='Enregistrement…';

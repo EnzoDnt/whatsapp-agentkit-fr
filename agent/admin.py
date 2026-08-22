@@ -12,6 +12,7 @@ ouverte par défaut.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import os
@@ -192,6 +193,35 @@ async def modifier_mot_de_passe(corps: dict, utilisateur=Depends(utilisateur_cou
         utilisateur.id, corps.get("ancien", ""), corps.get("nouveau", "")
     )
     return {"statut": "modifie"}
+
+
+# ── Traitement des fichiers reçus ────────────────────────────────────────
+
+
+@routeur.get("/medias", dependencies=[Depends(verifier_jeton)])
+async def lire_medias():
+    """
+    Tableau de routage : quel service traite chaque type de fichier.
+
+    Chaque case indique si le choix est possible — un fournisseur qui ne sait
+    pas lire ce type, ou dont la clé manque, est signalé avec sa raison pour
+    être grisé dans l'interface. Mieux vaut une case grise qu'une option qui
+    échouera au premier fichier reçu.
+    """
+    from agent.medias import tableau_routage
+
+    return tableau_routage()
+
+
+@routeur.put("/medias", dependencies=[Depends(verifier_jeton)])
+async def ecrire_medias(corps: dict):
+    from agent.medias import MediaIndisponible, enregistrer_routage
+
+    try:
+        applique = await asyncio.to_thread(enregistrer_routage, corps.get("choix") or {})
+    except MediaIndisponible as e:
+        raise HTTPException(400, str(e)) from e
+    return {"statut": "enregistre", "choix": applique}
 
 
 @routeur.get("/etat", dependencies=[Depends(verifier_jeton)])

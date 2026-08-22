@@ -216,8 +216,16 @@ class TestWebhook:
     def test_un_message_vide_est_ignore(self, client, cerveau_simule):
         assert poster(client, payload_meta("   ")).json()["empiles"] == 0
 
-    def test_les_messages_non_textuels_sont_ignores(self, client, cerveau_simule):
-        assert poster(client, payload_meta("", type_msg="image")).json()["empiles"] == 0
+    def test_un_media_est_pris_en_charge_et_non_ignore(self, client, cerveau_simule):
+        """
+        Un média n'est plus écarté au webhook, malgré son texte vide.
+
+        Avant, tout ce qui n'était pas du texte tombait ici en silence : le
+        client envoyait une note vocale et n'obtenait aucune réponse. Il est
+        désormais mis en file — son contenu sera produit par medias.py, et si
+        cela échoue, un humain est prévenu.
+        """
+        assert poster(client, payload_meta("", type_msg="image")).json()["empiles"] == 1
 
     def test_un_payload_illisible_ne_declenche_pas_de_reessai_infini(self, client):
         corps = b'{"pas": "le bon format"}'
