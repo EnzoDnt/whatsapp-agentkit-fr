@@ -206,6 +206,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 </nav>
 
 <main hidden>
+  <div id="diagnostic" hidden></div>
   <!-- CONVERSATIONS -->
   <section class="vue" aria-hidden="false" id="v-conversations">
     <div class="duo">
@@ -356,9 +357,12 @@ async function demarrer(){
 async function entrer(e){
   $('#acces').hidden=true;$('nav').hidden=false;$('main').hidden=false;
   $('#qui').textContent=e.nom||e.email||'';
-  try{const s=await (await fetch('/')).json();
-    $('#etat-agent').textContent=s.statut==='ok'?'en ligne':s.statut;
-    $('#nom-espace').textContent=s.fournisseur==='meta'?'WhatsApp connecté':'Simulateur local';
+  try{const s=await jget('/etat');
+    $('#etat-agent').textContent=s.statut==='ok'?'en ligne'
+      :s.statut==='erreur'?'configuration incomplète':s.statut;
+    $('#nom-espace').textContent=s.fournisseur==='meta'?'WhatsApp connecté'
+      :s.fournisseur==='simulateur'?'Simulateur (non connecté à WhatsApp)':'Agent';
+    diagnostic(s);
   }catch{}
   try{const m=await jget('/marque');
     if(m.nom)$('#nom-espace').textContent=m.nom;
@@ -367,6 +371,24 @@ async function entrer(e){
   charger();
   setInterval(()=>{compterValider();if(vue==='conversations')chargerConv();},7000);
   compterValider();
+}
+function diagnostic(s){
+  const box=$('#diagnostic');
+  const probs=s.a_corriger||[];
+  if(s.statut==='erreur'){
+    box.innerHTML=`<div class="avis dg"><strong>L'agent n'est pas opérationnel.</strong>
+      ${esc(s.detail||'Configuration incomplète.')}</div>`;
+    box.hidden=false;return;
+  }
+  if(!probs.length){box.hidden=true;box.innerHTML='';return;}
+  const rang={critique:0,haute:1,moyenne:2,info:3};
+  probs.sort((a,b)=>(rang[a.gravite]??9)-(rang[b.gravite]??9));
+  box.innerHTML=probs.map(p=>{
+    const genre=p.gravite==='critique'||p.gravite==='haute'?'dg':p.gravite==='moyenne'?'at':'ac';
+    return `<div class="avis ${genre}"><strong>${esc(p.sujet)}</strong> — ${esc(p.explication)}
+      <div class="ptt" style="margin-top:4px">→ ${esc(p.remede)}</div></div>`;
+  }).join('');
+  box.hidden=false;
 }
 async function compterValider(){
   try{const d=await jget('/escalades?statut=en_attente');

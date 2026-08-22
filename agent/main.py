@@ -133,29 +133,20 @@ else:
 
 @app.get("/")
 async def sante():
-    """Point de santé pour l'hébergeur et le diagnostic."""
-    if erreur_configuration:
-        return {"statut": "erreur", "detail": erreur_configuration}
+    """
+    Point de santé PUBLIC — volontairement muet.
 
-    graves = [a for a in alertes_configuration if a["gravite"] in ("critique", "haute")]
-    if etat_fournisseur["ok"] and not graves:
-        statut = "ok"
-    elif graves:
-        statut = "a_corriger"
-    else:
-        statut = "degrade"
+    Cette URL n'exige aucune authentification : l'hébergeur (Coolify, Railway)
+    la sonde pour savoir si le conteneur répond. Elle ne doit donc RIEN
+    dévoiler. Elle exposait le numéro WhatsApp, la dépense du jour, le nom
+    vérifié du compte et la liste des défauts de configuration — autant
+    d'informations utiles à un tiers, en libre accès. Tout cela vit désormais
+    sur /admin/etat, derrière la connexion.
 
-    return {
-        "statut": statut,
-        "fournisseur": fournisseur.nom if fournisseur else None,
-        "connexion": etat_fournisseur,
-        "environnement": ENVIRONNEMENT,
-        "depense_du_jour_usd": depenses.depense_du_jour,
-        # Exposé à dessein : ce sont des noms de variables à renseigner, jamais
-        # leur valeur. C'est le seul endroit où la personne qui a déployé ira
-        # vraiment regarder.
-        "a_corriger": alertes_configuration,
-    }
+    Toujours 200 tant que le process tourne : un défaut de configuration se
+    corrige par les variables, pas en laissant l'hébergeur redémarrer en boucle.
+    """
+    return {"statut": "actif"}
 
 
 @app.get("/webhook")

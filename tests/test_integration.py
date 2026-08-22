@@ -70,9 +70,19 @@ def poster(client, charge: dict, *, signer_avec: str | None = SECRET_WEBHOOK):
 # ═════════════════════════════════════════════════════════════════════════
 
 class TestSante:
-    def test_le_serveur_repond_et_annonce_son_fournisseur(self, client):
+    def test_le_point_de_sante_public_ne_devoile_rien(self, client):
+        """/ est sondé par l'hébergeur, sans authentification : il ne doit
+        exposer ni le fournisseur, ni le numéro, ni la dépense."""
         d = client.get("/").json()
-        assert d["statut"] == "ok"
+        assert d == {"statut": "actif"}
+
+    def test_le_detail_est_reserve_aux_comptes_connectes(self, client, connecte):
+        # Sans session : refusé.
+        from fastapi.testclient import TestClient
+        with TestClient(connecte.app) as anonyme:
+            assert anonyme.get("/admin/etat").status_code == 401
+        # Connecté : le détail est là.
+        d = connecte.get("/admin/etat").json()
         assert d["fournisseur"] == "simulateur"
         assert d["depense_du_jour_usd"] == 0.0
 

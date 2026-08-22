@@ -215,7 +215,7 @@ Rien ne le signale sur le moment, ce qui en fait le plus coûteux des deux.
 
 ## 4. Après le déploiement ✅ automatique
 
-Trois choses, dans cet ordre. Ne saute aucune vérification.
+Quatre choses, dans cet ordre. Ne saute aucune vérification.
 
 **1. Le serveur répond**
 
@@ -223,19 +223,47 @@ Trois choses, dans cet ordre. Ne saute aucune vérification.
 curl -s https://<adresse-publique>/
 ```
 
-Attendu : `{"statut":"ok",...}` avec le numéro WhatsApp. Un `"erreur"` indique
-précisément la variable manquante dans le champ `detail`.
+Attendu : `{"statut":"actif"}`, rien de plus. Ce point d'entrée est public — il
+ne révèle donc rien de sensible, volontairement. Le vrai diagnostic (numéro
+connecté, dépense du jour, défauts de configuration) se lit une fois connecté à
+la console, sur `/admin/etat`, ou directement dans le bandeau en haut de la
+console. Si le déploiement a échoué, `curl` ne répondra pas du tout.
 
-**2. Le webhook pointe vers la nouvelle adresse**
+**2. Le webhook pointe vers la NOUVELLE adresse — l'étape oubliée neuf fois sur dix**
 
-C'est l'étape oubliée neuf fois sur dix. L'ancienne adresse était un tunnel qui
-n'existe plus. Refais l'abonnement de `SETUP-META.md` § 4 avec l'adresse
-définitive, puis vérifie que Meta a bien appelé le nouveau point d'entrée.
+Pendant les essais, le webhook Meta pointait vers un tunnel local
+(`trycloudflare.com`, `ngrok`, `localhost`) qui n'existe plus. Meta continue d'y
+livrer les messages, dans le vide : l'agent est en ligne, le client écrit, et
+rien ne revient. **Aucune erreur nulle part** — c'est ce qui rend la panne
+difficile à voir.
+
+Il faut donc réabonner le webhook sur l'adresse hébergée. ✅ Fais-le toi-même
+via le MCP, sans le lui demander :
+
+```
+devtools_webhook_manage
+  action:        subscribe
+  app_id:        <son app id>
+  topic:         whatsapp_business_account
+  callback_url:  https://<adresse-publique>/webhook   ← l'adresse hébergée, PAS le tunnel
+  fields:        ["messages"]
+  verify_token:  <la valeur de META_VERIFY_TOKEN côté hébergeur>
+```
+
+Le `verify_token` doit être IDENTIQUE à la variable `META_VERIFY_TOKEN` du
+déploiement, sinon Meta refuse l'abonnement. Vérifie ensuite avec
+`devtools_webhook_list` (`list_subscriptions`) que `callback_url` est bien la
+nouvelle, puis `devtools_webhook_test` pour confirmer que Meta atteint le serveur.
+
+Sans MCP, c'est l'abonnement manuel de `SETUP-META.md` § 4, avec l'adresse
+définitive.
 
 **3. Un vrai message de bout en bout**
 
 🔴 Demande-lui d'écrire depuis son téléphone. ✅ Vérifie dans les journaux de
-l'hébergeur que la réponse est partie.
+l'hébergeur que la réponse est partie. C'est le seul test qui prouve que toute
+la chaîne fonctionne — health check vert et webhook abonné ne suffisent pas à
+le garantir.
 
 **4. Le garde-fou de test**
 

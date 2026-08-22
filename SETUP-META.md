@@ -108,8 +108,11 @@ lancement : garde le tunnel ouvert pendant tout le test.
 curl -s https://xxx.trycloudflare.com/
 ```
 
-Attendu : `{"statut":"ok",...}` ou `"degrade"`. Un 502 = le serveur local n'est
-pas démarré (`make serveur`).
+Attendu : `{"statut":"actif"}`. Ce point d'entrée est public : il ne dit que
+« je suis vivant », rien de plus. Pour confirmer que Meta est bien connecté,
+lis la ligne « Connexion fournisseur : OK — Numéro … » dans les journaux de
+démarrage, ou connecte-toi à la console (bandeau en haut). Un 502 = le serveur
+local n'est pas démarré (`make serveur`).
 
 ---
 
@@ -346,8 +349,9 @@ Attendu : `{"success": true}`.
 | L'app n'apparaît pas dans la liste | Mauvais portefeuille d'entreprise | Étape 1, change de portefeuille |
 
 ✅ Une fois les trois contrôles passés : remplace `META_ACCESS_TOKEN` dans `.env`
-et redémarre le serveur. `GET /` doit alors renvoyer `"statut":"ok"` avec le
-numéro affiché — et non plus `"degrade"`.
+et redémarre le serveur. `GET /` renvoie `{"statut":"actif"}` (public et muet) ;
+le détail — fournisseur, numéro connecté — se lit sur `/admin/etat` une fois
+connecté à la console, ou dans le bandeau en haut de celle-ci.
 
 ## Étape 8 — Production
 

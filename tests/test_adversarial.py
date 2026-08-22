@@ -43,8 +43,18 @@ class TestProduction:
                     "agent.providers", "agent.main"):
             importlib.reload(sys.modules[nom])
         from fastapi.testclient import TestClient
-        with TestClient(sys.modules["agent.main"].app) as c:
-            d = c.get("/").json()
+        # base_url https : en production le cookie de session est marqué Secure,
+        # donc il n'est renvoyé que sur une connexion chiffrée — le cas réel
+        # derrière le proxy TLS de Coolify.
+        with TestClient(sys.modules["agent.main"].app, base_url="https://testserver") as c:
+            # / reste public et muet, même en erreur de configuration.
+            assert c.get("/").json() == {"statut": "actif"}
+            # Le détail de l'erreur exige une session : on amorce un compte.
+            r = c.post("/admin/amorcer", json={
+                "nom": "T", "email": "t@e.fr", "mot_de_passe": "mot-de-passe-de-test",
+                "jeton": "jeton-installation-de-test"})
+            assert r.status_code == 200, r.text
+            d = c.get("/admin/etat").json()
         assert d["statut"] == "erreur"
         assert "META_APP_SECRET" in d["detail"]
 

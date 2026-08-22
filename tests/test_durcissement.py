@@ -169,10 +169,22 @@ def test_la_revue_donne_un_remede_a_chaque_probleme(monkeypatch):
         assert a["explication"].strip(), a["sujet"]
 
 
-def test_le_point_de_sante_expose_la_revue(client):
+def test_le_point_de_sante_public_reste_muet(client):
+    """Rien de sensible sur / : ni fournisseur, ni numéro, ni dépense, ni revue."""
     corps = client.get("/").json()
+    assert corps == {"statut": "actif"}
+    assert "a_corriger" not in corps
+    assert "connexion" not in corps
+
+
+def test_la_revue_est_lisible_sur_etat_authentifie(connecte):
+    corps = connecte.get("/admin/etat").json()
     assert "a_corriger" in corps
     assert isinstance(corps["a_corriger"], list)
+
+
+def test_etat_detaille_refuse_sans_session(client):
+    assert client.get("/admin/etat").status_code == 401
 
 
 def test_la_revue_ne_divulgue_aucune_valeur_secrete(monkeypatch):

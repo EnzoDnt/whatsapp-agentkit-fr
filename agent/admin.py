@@ -39,7 +39,7 @@ from agent.auth import (
     utilisateur_courant,
 )
 from agent.memory import Message, Session, enregistrer_message
-from agent.securite import masquer_identifiant
+from agent.securite import depenses, masquer_identifiant
 
 logger = logging.getLogger("agentkit")
 
@@ -192,6 +192,43 @@ async def modifier_mot_de_passe(corps: dict, utilisateur=Depends(utilisateur_cou
         utilisateur.id, corps.get("ancien", ""), corps.get("nouveau", "")
     )
     return {"statut": "modifie"}
+
+
+@routeur.get("/etat", dependencies=[Depends(verifier_jeton)])
+async def etat_detaille():
+    """
+    Diagnostic complet, réservé aux comptes connectés.
+
+    Reprend ce que le point de santé public exposait autrefois — fournisseur,
+    numéro connecté, dépense du jour, revue de configuration — mais pour une
+    personne authentifiée seulement. La page de la console l'affiche en bandeau
+    quand quelque chose demande attention.
+    """
+    import agent.main as m
+
+    if m.erreur_configuration:
+        return {
+            "statut": "erreur",
+            "detail": m.erreur_configuration,
+            "a_corriger": m.alertes_configuration,
+        }
+
+    graves = [a for a in m.alertes_configuration if a["gravite"] in ("critique", "haute")]
+    if m.etat_fournisseur["ok"] and not graves:
+        statut = "ok"
+    elif graves:
+        statut = "a_corriger"
+    else:
+        statut = "degrade"
+
+    return {
+        "statut": statut,
+        "fournisseur": m.fournisseur.nom if m.fournisseur else None,
+        "connexion": m.etat_fournisseur,
+        "environnement": m.ENVIRONNEMENT,
+        "depense_du_jour_usd": depenses.depense_du_jour,
+        "a_corriger": m.alertes_configuration,
+    }
 
 
 @routeur.get("/")
