@@ -104,7 +104,10 @@ clients**. Le kit ingère les deux.
 
 À savoir : un *username business* ne remplace pas le numéro de téléphone. Il se
 réserve après, et ne masque pas le numéro de l'entreprise. Pour ouvrir un compte
-WhatsApp Business API, un numéro reste obligatoire.
+WhatsApp Business API, un numéro **dédié** reste obligatoire — jamais celui du
+client. Comment le choisir et où le prendre à bas coût (VoIP OVHcloud ou SIM) :
+**[`SETUP-NUMERO.md`](SETUP-NUMERO.md)**. C'est l'étape la plus longue de la mise
+en production, à lancer tôt.
 
 ---
 

@@ -370,6 +370,13 @@ Trois conséquences, toutes voulues :
 Remplace le tunnel par une URL stable (Railway, Fly, VPS) et **réabonne le
 webhook** sur cette nouvelle URL — l'étape 4, à refaire.
 
+**Et surtout, le vrai numéro.** Jusqu'ici tu as utilisé le numéro de test de Meta
+(limité à 5 destinataires). Pour de vrais clients, il faut un **numéro dédié** :
+tout est dans **`SETUP-NUMERO.md`** — comment le choisir (jamais le numéro perso
+du client), où le prendre (ligne VoIP OVHcloud dès ~0,99 €/mois HT, ou SIM bas
+coût), et comment recevoir le code de vérification. C'est l'étape la plus longue :
+lance-la tôt.
+
 Rappelle enfin la **fenêtre de 24 h** : hors de ce délai après le dernier message
 du client, seul un template approuvé par Meta peut être envoyé. Comme l'agent
 répond toujours à quelqu'un qui vient d'écrire, ça ne se pose jamais en pratique.
