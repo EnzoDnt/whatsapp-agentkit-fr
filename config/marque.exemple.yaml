@@ -1,0 +1,11 @@
+# Identité affichée dans la console — posée par l'intégrateur à l'installation.
+#
+# nom  : remplace « Votre agent » en haut de la barre latérale.
+# logo : nom d'un fichier placé dans config/, à côté de ce fichier.
+#        Formats acceptés : .png .jpg .svg .webp
+#        Carré de 128 px minimum, fond transparent de préférence.
+#
+# Pour l'activer : renommez ce fichier en marque.yaml et renseignez les valeurs.
+
+nom: "Maison Lorette"
+logo: "logo.png"

@@ -356,6 +356,10 @@ async function entrer(e){
     $('#etat-agent').textContent=s.statut==='ok'?'en ligne':s.statut;
     $('#nom-espace').textContent=s.fournisseur==='meta'?'WhatsApp connecté':'Simulateur local';
   }catch{}
+  try{const m=await jget('/marque');
+    if(m.nom)$('#nom-espace').textContent=m.nom;
+    if(m.a_logo)$('#logo').innerHTML='<img src="/admin/logo" alt="">';
+  }catch{}
   charger();
   setInterval(()=>{compterValider();if(vue==='conversations')chargerConv();},7000);
   compterValider();

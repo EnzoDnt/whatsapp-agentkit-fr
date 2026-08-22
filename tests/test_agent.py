@@ -456,3 +456,67 @@ def test_les_tentatives_de_connexion_sont_freinees():
     assert l.autorise("5.6.7.8") is True     # une autre IP n'est pas pénalisée
     l.succes("1.2.3.4")
     assert l.autorise("1.2.3.4") is True     # remise à zéro après succès
+
+
+# ── Multi-fournisseurs ───────────────────────────────────────────────────
+
+def test_les_quatre_fournisseurs_ont_un_modele_par_defaut():
+    from agent.llm import FOURNISSEURS, modele_par_defaut
+
+    assert set(FOURNISSEURS) == {"anthropic", "openai", "openrouter", "google"}
+    for f in FOURNISSEURS:
+        assert modele_par_defaut(f)
+
+
+def test_un_fournisseur_inconnu_est_refuse_avec_un_message_utile():
+    import pytest as _p
+
+    from agent.llm import ErreurLLM, obtenir_client
+
+    with _p.raises(ErreurLLM) as e:
+        obtenir_client("mistral")
+    assert "mistral" in str(e.value) and "anthropic" in str(e.value)
+
+
+def test_le_tarif_se_resout_malgre_le_prefixe_openrouter():
+    """OpenRouter préfixe par l'éditeur : anthropic/claude-sonnet-5."""
+    from agent.llm import tarif
+
+    assert tarif("claude-sonnet-5") == tarif("anthropic/claude-sonnet-5") == (3.0, 15.0)
+    assert tarif("un-modele-jamais-vu") == (3.0, 15.0)   # repli médian
+
+
+def test_les_schemas_d_outils_sont_traduits_au_format_openai():
+    from agent.llm import ClientCompatibleOpenAI
+    from agent.tools import schemas_outils
+
+    traduits = ClientCompatibleOpenAI._outils(schemas_outils())
+    assert all(o["type"] == "function" for o in traduits)
+    assert {o["function"]["name"] for o in traduits} == {s["name"] for s in schemas_outils()}
+    assert all("parameters" in o["function"] for o in traduits)
+
+
+# ── Marque du client ─────────────────────────────────────────────────────
+
+def test_le_logo_ne_peut_pas_sortir_du_dossier_config(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "secret.env").write_text("x", encoding="utf-8")
+    (tmp_path / "config" / "marque.yaml").write_text(
+        'nom: "X"\nlogo: "../secret.env"\n', encoding="utf-8"
+    )
+    import agent.admin as admin
+
+    assert admin.lire_marque()["logo"] == ""
+
+
+def test_une_extension_non_image_est_refusee(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "logo.svgz").write_text("x", encoding="utf-8")
+    (tmp_path / "config" / "marque.yaml").write_text(
+        'nom: "X"\nlogo: "logo.svgz"\n', encoding="utf-8"
+    )
+    import agent.admin as admin
+
+    assert admin.lire_marque()["logo"] == ""

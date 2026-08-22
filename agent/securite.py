@@ -182,7 +182,9 @@ class CompteurDepense:
 
     def enregistrer(self, modele: str, tokens_entree: int, tokens_sortie: int) -> float:
         self._verifier_jour()
-        prix_e, prix_s = TARIFS.get(modele, (3.0, 15.0))
+        from agent.llm import tarif
+
+        prix_e, prix_s = tarif(modele)
         cout = (tokens_entree / 1_000_000) * prix_e + (tokens_sortie / 1_000_000) * prix_s
         self._depense += cout
         return cout

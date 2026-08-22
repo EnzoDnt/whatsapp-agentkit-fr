@@ -72,6 +72,8 @@ gauche.
 | Tester le webhook | MCP `devtools_webhook_test` |
 | Consulter la doc Meta à jour | MCP `devtools_discovery` (aucune permission requise) |
 | Installer Python, créer le venv, installer les dépendances | `uv` / `python3` |
+| Installer le paquet d'un autre fournisseur de modèle | `uv pip install openai` |
+| Poser le logo du client et écrire `config/marque.yaml` | édition de fichier |
 | Installer et lancer un tunnel HTTPS public | `brew install cloudflared` puis `cloudflared tunnel --url` |
 | Générer les secrets (verify token, sel de hachage) | `openssl rand -hex 24` |
 | Écrire le `.env` | édition de fichier |
@@ -120,6 +122,42 @@ nécessaire ici.
 À ce stade la personne voit son agent fonctionner. Tout le reste est du
 branchement.
 
+### Étape 1 bis — Le choix du modèle
+
+Pose la question, ne décide pas à sa place : c'est son budget.
+
+> **Quel moteur d'intelligence veux-tu utiliser ?**
+>
+> 1. **Claude (Anthropic)** — recommandé, c'est ce pour quoi le kit est réglé.
+>    Comptez ~0,02 $ par message client sur Sonnet 5.
+> 2. **OpenAI** — si tu as déjà un compte et des crédits.
+> 3. **OpenRouter** — un seul compte pour accéder à tous les modèles, pratique
+>    pour comparer. Facturation unique.
+> 4. **Google (Gemini)** — souvent le moins cher à qualité comparable.
+>
+> Tu peux changer d'avis plus tard : c'est une ligne dans un fichier.
+
+✅ **Tu fais** : écris `LLM_PROVIDER` et, si besoin, `LLM_MODEL` dans le `.env`,
+puis la clé correspondante.
+
+| Fournisseur | Variable de clé | Modèle par défaut |
+|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+| `openai` | `OPENAI_API_KEY` | `gpt-5.1` |
+| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-5` |
+| `google` | `GOOGLE_API_KEY` | `gemini-2.5-pro` |
+
+Pour tout ce qui n'est pas Anthropic, installe le paquet nécessaire — ne le lui
+demande pas :
+
+```bash
+uv pip install openai
+```
+
+**Vérification** : lance le simulateur et envoie un message. Une réponse
+cohérente = le fournisseur répond. Une erreur de configuration est explicite
+(clé vide, fournisseur inconnu, paquet manquant) et te dit quoi corriger.
+
 ### Étape 2 — L'entretien métier
 
 Dix questions, **une seule à la fois**, en attendant la réponse. Voir
@@ -142,6 +180,25 @@ dans `knowledge/` — tu les liras.
 6. ✅ Tu vérifies l'abonnement et tu le testes
 7. 🔴 Il ajoute son propre numéro comme destinataire de test, puis **écrit sur WhatsApp**
 8. ✅ Tu lis les logs et confirmes que la réponse est partie
+
+### Étape 2 bis — Le logo du client
+
+Une console aux couleurs du client vaut mieux qu'une console anonyme, et ça ne
+coûte qu'une minute.
+
+> **As-tu un logo ?** Dépose le fichier n'importe où et donne-moi son chemin —
+> je m'occupe du reste. Un carré de 128 px minimum, en `.png`, `.jpg`, `.svg`
+> ou `.webp`. Sans logo, ce n'est pas grave : on affiche juste le nom.
+
+✅ **Tu fais** : copie le fichier dans `config/`, puis écris `config/marque.yaml` :
+
+```yaml
+nom: "Maison Lorette"
+logo: "logo.png"
+```
+
+**Vérification** : recharge `/admin` — le logo et le nom apparaissent en haut de
+la barre latérale.
 
 ### Étape 3 bis — Back-office (optionnel, recommandé)
 

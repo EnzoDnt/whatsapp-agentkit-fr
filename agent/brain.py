@@ -9,26 +9,31 @@ import os
 from datetime import datetime
 
 import yaml
-from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 
+from agent.llm import ErreurLLM, modele_par_defaut, obtenir_client
 from agent.securite import depenses, masquer_telephone
 from agent.tools import executer_outil, outil_accepte, schemas_outils
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
 
-client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
-# Modèle réglable depuis .env, sans toucher au code.
-#   claude-opus-5     le plus capable          5 $ / 25 $ par million de tokens
-#   claude-sonnet-5   l'équilibré (défaut)     3 $ / 15 $
-#   claude-haiku-4-5  le plus rapide           1 $ / 5 $
+# Fournisseur et modèle se règlent depuis .env, sans toucher au code.
+#   anthropic  (défaut)  claude-opus-5 · claude-sonnet-5 · claude-haiku-4-5
+#   openai               gpt-5.1 et suivants
+#   openrouter           n'importe quel modèle du catalogue
+#   google               gemini-2.5-pro · gemini-2.5-flash
 # Le « or » plutôt que le défaut de getenv : une variable déclarée mais vide
-# renvoie "" et laisserait l'agent sans modèle.
-MODELE = os.getenv("ANTHROPIC_MODEL") or "claude-sonnet-5"
+# renvoie "" et laisserait l'agent sans fournisseur.
+FOURNISSEUR = (os.getenv("LLM_PROVIDER") or "anthropic").strip().lower()
 
-# Un bot de réponses courtes : un effort faible répond plus vite et moins cher.
+# ANTHROPIC_MODEL reste accepté : les installations existantes ne cassent pas.
+MODELE = (
+    os.getenv("LLM_MODEL") or os.getenv("ANTHROPIC_MODEL") or ""
+).strip() or modele_par_defaut(FOURNISSEUR)
+
+# Bot de réponses courtes : un effort faible répond plus vite et moins cher.
+# Ce réglage n'existe que chez Anthropic ; les autres l'ignorent.
 EFFORT = os.getenv("ANTHROPIC_EFFORT", "low").strip()
 
 # Attention : ce plafond ne concerne pas que la réponse visible. Sur les modèles
@@ -39,8 +44,18 @@ MAX_TOKENS = int(os.getenv("ANTHROPIC_MAX_TOKENS") or "4096")
 # Garde-fou contre une boucle où le modèle rappellerait un outil sans fin.
 MAX_TOURS_OUTILS = int(os.getenv("MAX_TOURS_OUTILS", "5") or "5")
 
-# Certains modèles anciens refusent output_config. On retient l'échec.
-_supporte_effort = True
+# Le client est construit une fois, à la première réponse : si la configuration
+# est mauvaise, l'erreur doit remonter au moment où l'on tente de répondre, pas
+# à l'import — sinon le serveur ne démarre plus et le point de santé ne peut
+# rien expliquer.
+_client = None
+
+
+def client_llm():
+    global _client
+    if _client is None:
+        _client = obtenir_client(FOURNISSEUR, MODELE, MAX_TOKENS, EFFORT)
+    return _client
 
 
 def charger_config_prompts() -> dict:
@@ -218,108 +233,64 @@ async def generer_reponse(
     les enregistrer dans l'historique, sinon ils pollueraient le contexte de tous
     les messages suivants.
     """
-    global _supporte_effort
-
     if not message or len(message.strip()) < 2:
         return message_incompris(), False
 
     if depenses.depassement():
         logger.error(
             f"Plafond de dépense journalier atteint ({depenses.depense_du_jour} $) : "
-            "appel à Claude refusé."
+            "appel au modèle refusé."
         )
         return message_saturation(), False
 
-    messages: list[dict] = [{"role": m["role"], "content": m["content"]} for m in historique]
-    messages.append({"role": "user", "content": message})
-
     systeme = prompt_systeme() + await bloc_consignes() + horodatage()
-    outils = schemas_outils()
 
-    async def appeler(extra: dict):
-        return await client.messages.create(
-            model=MODELE,
-            max_tokens=MAX_TOKENS,
-            system=systeme,
-            messages=messages,
-            tools=outils,
-            **extra,
+    async def executer(nom: str, arguments: dict) -> str:
+        # Le numéro vient du webhook, jamais du modèle : sinon une injection de
+        # prompt pourrait lui faire enregistrer une demande au nom d'un autre
+        # client. On ne l'injecte que dans les outils qui le déclarent, sans quoi
+        # les autres lèvent une TypeError et le client perd sa réponse.
+        if telephone and outil_accepte(nom, "telephone"):
+            arguments = {**arguments, "telephone": telephone}
+        logger.info(f"Outil appelé : {nom}")
+        return await executer_outil(nom, arguments)
+
+    try:
+        bilan = await client_llm().converser(
+            systeme=systeme,
+            historique=historique,
+            message=message,
+            outils=schemas_outils(),
+            executer=executer,
+            max_tours=MAX_TOURS_OUTILS,
         )
+    except ErreurLLM as e:
+        logger.error(f"Configuration du modèle invalide : {e}")
+        return message_erreur(), False
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Échec de l'appel au modèle : {e}")
+        return message_erreur(), False
 
-    for tour in range(MAX_TOURS_OUTILS):
-        extra = (
-            {"output_config": {"effort": EFFORT}} if (_supporte_effort and EFFORT) else {}
-        )
-        try:
-            reponse = await appeler(extra)
-        except Exception as e:  # noqa: BLE001
-            if extra and _erreur_due_a_effort(e):
-                logger.warning(
-                    f"{MODELE} refuse output_config.effort ; nouvel essai sans ce paramètre."
-                )
-                _supporte_effort = False
-                try:
-                    reponse = await appeler({})
-                except Exception as e2:  # noqa: BLE001
-                    logger.error(f"Échec de l'appel à Claude : {e2}")
-                    return message_erreur(), False
-            else:
-                logger.error(f"Échec de l'appel à Claude : {e}")
-                return message_erreur(), False
-
-        cout = depenses.enregistrer(
-            MODELE, reponse.usage.input_tokens, reponse.usage.output_tokens
-        )
-        logger.info(
-            f"Claude {MODELE} — {reponse.usage.input_tokens} entrée / "
-            f"{reponse.usage.output_tokens} sortie (~{cout:.4f} $, "
-            f"cumul du jour {depenses.depense_du_jour} $)"
-        )
-
-        if reponse.stop_reason != "tool_use":
-            if reponse.stop_reason == "max_tokens":
-                logger.warning(
-                    f"Réponse tronquée au plafond de {MAX_TOKENS} tokens. "
-                    "Augmentez ANTHROPIC_MAX_TOKENS ou raccourcissez le prompt système."
-                )
-            texte = _extraire_texte(reponse)
-            if not texte:
-                logger.warning("Claude a renvoyé une réponse sans texte")
-                return message_incompris(), False
-
-            return appliquer_transparence(texte, premier_echange=not historique), True
-
-        # ── Le modèle demande un ou plusieurs outils ──────────────────────
-        # On renvoie TOUS les tool_result dans UN SEUL message utilisateur :
-        # les répartir sur plusieurs messages apprend au modèle à ne plus
-        # paralléliser ses appels.
-        messages.append({"role": "assistant", "content": reponse.content})
-        resultats = []
-        for bloc in reponse.content:
-            if getattr(bloc, "type", None) != "tool_use":
-                continue
-            arguments = dict(bloc.input or {})
-
-            # Le numéro vient du webhook, jamais du modèle : sinon une injection
-            # de prompt pourrait lui faire enregistrer une demande au nom d'un
-            # autre client. Mais on ne l'injecte QUE dans les outils qui le
-            # déclarent — l'ajouter aux autres lève un TypeError et fait perdre
-            # sa réponse au client.
-            if telephone and outil_accepte(bloc.name, "telephone"):
-                arguments["telephone"] = telephone
-
-            logger.info(f"Outil appelé : {bloc.name}")
-            resultats.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": bloc.id,
-                    "content": await executer_outil(bloc.name, arguments),
-                }
-            )
-        messages.append({"role": "user", "content": resultats})
-
-    logger.warning(
-        f"{MAX_TOURS_OUTILS} tours d'outils atteints pour "
-        f"{masquer_telephone(telephone)} sans réponse finale."
+    cout = depenses.enregistrer(MODELE, bilan.tokens_entree, bilan.tokens_sortie)
+    logger.info(
+        f"{FOURNISSEUR}/{MODELE} — {bilan.tokens_entree} entrée / {bilan.tokens_sortie} sortie "
+        f"en {bilan.tours} tour(s) (~{cout:.4f} $, cumul du jour {depenses.depense_du_jour} $)"
     )
-    return message_erreur(), False
+
+    if bilan.tronquee:
+        logger.warning(
+            f"Réponse tronquée au plafond de {MAX_TOKENS} tokens. "
+            "Augmentez ANTHROPIC_MAX_TOKENS ou raccourcissez le prompt système."
+        )
+
+    if not bilan.texte:
+        if bilan.tours >= MAX_TOURS_OUTILS:
+            logger.warning(
+                f"{MAX_TOURS_OUTILS} tours d'outils atteints pour "
+                f"{masquer_telephone(telephone)} sans réponse finale."
+            )
+            return message_erreur(), False
+        logger.warning("Le modèle a renvoyé une réponse sans texte")
+        return message_incompris(), False
+
+    return appliquer_transparence(bilan.texte, premier_echange=not historique), True

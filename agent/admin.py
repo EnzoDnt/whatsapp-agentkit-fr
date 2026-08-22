@@ -724,3 +724,56 @@ async def ignorer_escalade(identifiant: int, utilisateur=Depends(utilisateur_cou
         await session.commit()
     await basculer_pause(cible, False)
     return {"statut": "ignoree"}
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Marque du client
+# ═════════════════════════════════════════════════════════════════════════
+
+FICHIER_MARQUE = Path("config/marque.yaml")
+IMAGES_AUTORISEES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                     ".svg": "image/svg+xml", ".webp": "image/webp"}
+
+
+def lire_marque() -> dict:
+    """
+    Identité affichée dans la console : nom de l'espace et logo.
+
+    Se configure par fichier plutôt que par l'interface : c'est l'intégrateur
+    qui pose le logo au moment de l'installation, pas le commerçant au
+    quotidien. Un fichier se donne à un agent de développement ; un formulaire
+    d'envoi de fichier, non.
+    """
+    try:
+        donnees = yaml.safe_load(FICHIER_MARQUE.read_text(encoding="utf-8")) or {}
+    except FileNotFoundError:
+        donnees = {}
+
+    nom_logo = str(donnees.get("logo") or "").strip()
+    chemin = None
+    if nom_logo:
+        candidat = Path("config") / Path(nom_logo).name
+        if candidat.is_file() and candidat.suffix.lower() in IMAGES_AUTORISEES:
+            chemin = candidat
+
+    return {
+        "nom": str(donnees.get("nom") or "").strip(),
+        "logo": chemin.name if chemin else "",
+        "_chemin": chemin,
+    }
+
+
+@routeur.get("/marque", dependencies=[Depends(verifier_jeton)])
+async def marque():
+    m = lire_marque()
+    return {"nom": m["nom"], "a_logo": bool(m["logo"])}
+
+
+@routeur.get("/logo", dependencies=[Depends(verifier_jeton)])
+async def logo():
+    m = lire_marque()
+    if not m["_chemin"]:
+        raise HTTPException(404, "Aucun logo configuré")
+    return FileResponse(
+        m["_chemin"], media_type=IMAGES_AUTORISEES[m["_chemin"].suffix.lower()]
+    )

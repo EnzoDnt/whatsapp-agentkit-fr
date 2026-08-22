@@ -14,3 +14,7 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# Identité du client (posée par l intégrateur)
+config/marque.yaml
+config/logo.*
