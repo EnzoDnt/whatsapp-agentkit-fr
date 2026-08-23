@@ -415,8 +415,15 @@ if est_developpement_declare():
 
     @app.post("/simulateur/reinitialiser")
     async def simulateur_reinitialiser():
+        from agent.memory import basculer_pause_conversation
         from agent.providers.simulateur import TELEPHONE_SIMULE
 
         await file_sortante.vider()
         n = await effacer_historique(TELEPHONE_SIMULE)
+        # On lève aussi la mise en attente humaine. Une escalade pendant les
+        # essais met la conversation en pause — c'est voulu en production, mais
+        # ici « réinitialiser » n'effaçait que l'historique : l'agent restait
+        # muet pour toujours, sans que rien ne l'explique, et le simulateur
+        # semblait cassé alors qu'il faisait exactement son travail.
+        await basculer_pause_conversation(TELEPHONE_SIMULE, False)
         return {"statut": "ok", "messages_effaces": n}

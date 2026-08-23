@@ -230,6 +230,13 @@ class ClientCompatibleOpenAI(ClientLLM):
         self.client = AsyncOpenAI(api_key=cle, base_url=base)
         self.modele = modele
         self.max_tokens = max_tokens
+        # Les modeles a raisonnement d'OpenAI (gpt-5.6 et suivants) appliquent
+        # un reasoning_effort par defaut que /v1/chat/completions refuse des
+        # qu'on joint des outils. L'agent en utilise a chaque tour : sans
+        # reasoning_effort="none", tout message part en erreur 400.
+        # Les modeles qui ignorent le parametre le rejettent : on retombe alors
+        # sur un appel nu, une seule fois.
+        self._supporte_effort_none = True
 
     @staticmethod
     def _outils(outils: list[dict]) -> list[dict]:
@@ -252,12 +259,28 @@ class ClientCompatibleOpenAI(ClientLLM):
         bilan = Reponse()
 
         for tour in range(max_tours):
-            r = await self.client.chat.completions.create(
-                model=self.modele,
-                messages=messages,
-                tools=self._outils(outils),
-                max_completion_tokens=self.max_tokens,
-            )
+            extra = {"reasoning_effort": "none"} if self._supporte_effort_none else {}
+            try:
+                r = await self.client.chat.completions.create(
+                    model=self.modele,
+                    messages=messages,
+                    tools=self._outils(outils),
+                    max_completion_tokens=self.max_tokens,
+                    **extra,
+                )
+            except Exception as e:  # noqa: BLE001
+                if not extra or "reasoning_effort" not in str(e):
+                    raise
+                logger.warning(
+                    f"{self.modele} refuse reasoning_effort ; reessai sans."
+                )
+                self._supporte_effort_none = False
+                r = await self.client.chat.completions.create(
+                    model=self.modele,
+                    messages=messages,
+                    tools=self._outils(outils),
+                    max_completion_tokens=self.max_tokens,
+                )
             if r.usage:
                 bilan.tokens_entree += r.usage.prompt_tokens or 0
                 bilan.tokens_sortie += r.usage.completion_tokens or 0

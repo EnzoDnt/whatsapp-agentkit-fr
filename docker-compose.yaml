@@ -12,12 +12,71 @@ services:
   agent:
     build: .
     restart: unless-stopped
-    env_file: [.env]
+    # required: false — en local le .env fournit les valeurs ; chez un
+    # hébergeur (Coolify, Railway) il n'existe pas, il est gitignoré et les
+    # variables sont injectées dans l'environnement. Sans ce drapeau, un clone
+    # frais échoue sur « env file .env not found », avant même le build.
+    env_file:
+      - path: .env
+        required: false
+    # Chaque variable est reprise explicitement : docker compose ne transmet
+    # PAS l'environnement de l'hôte au conteneur. Sans .env et sans ce bloc,
+    # l'agent démarre quand même, se déclare « healthy », répond
+    # {"statut":"actif"} — et retombe en mode simulateur, sans clé ni
+    # identifiants. Il ne répond à personne et rien ne le signale.
+    # Le « :? » fait échouer le déploiement en nommant la variable manquante,
+    # plutôt que de laisser passer cette panne muette.
     environment:
       PORT: 8000
       ENVIRONMENT: production
-      # Le mot de passe vient du .env : rien de sensible n'est écrit ici.
-      DATABASE_URL: postgresql+asyncpg://agentkit:${POSTGRES_PASSWORD}@base:5432/agentkit
+      DATABASE_URL: postgresql+asyncpg://agentkit:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD est obligatoire (openssl rand -hex 24)}@base:5432/agentkit
+
+      # Moteur d'intelligence
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_MODEL: ${LLM_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ANTHROPIC_EFFORT: ${ANTHROPIC_EFFORT:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+
+      # WhatsApp
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:?WHATSAPP_PROVIDER est obligatoire (meta ou simulateur)}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:-}
+      META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:-}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+      META_API_VERSION: ${META_API_VERSION:-v25.0}
+
+      # Console d'administration
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET est obligatoire en ligne (openssl rand -hex 32)}
+      DUREE_SESSION_HEURES: ${DUREE_SESSION_HEURES:-12}
+
+      # Sécurité et journaux
+      PII_HASH_SALT: ${PII_HASH_SALT:-}
+      AUTORISER_WEBHOOK_NON_SIGNE: ${AUTORISER_WEBHOOK_NON_SIGNE:-false}
+      LOG_MESSAGE_CONTENT: ${LOG_MESSAGE_CONTENT:-false}
+      MODE_TRANSPARENCE: ${MODE_TRANSPARENCE:-discrete}
+
+      # Garde-fous
+      RATE_LIMIT_MESSAGES: ${RATE_LIMIT_MESSAGES:-20}
+      RATE_LIMIT_FENETRE_S: ${RATE_LIMIT_FENETRE_S:-3600}
+      PLAFOND_DEPENSE_JOUR: ${PLAFOND_DEPENSE_JOUR:-5}
+      MAX_TOURS_OUTILS: ${MAX_TOURS_OUTILS:-5}
+      MAX_MESSAGES_HISTORIQUE: ${MAX_MESSAGES_HISTORIQUE:-20}
+      RETENTION_JOURS: ${RETENTION_JOURS:-90}
+      TEST_ALLOWLIST: ${TEST_ALLOWLIST:-}
+
+      # Fichiers reçus
+      MEDIA_FOURNISSEUR: ${MEDIA_FOURNISSEUR:-}
+      MEDIA_AUDIO_FOURNISSEUR: ${MEDIA_AUDIO_FOURNISSEUR:-}
+      MEDIA_IMAGE_FOURNISSEUR: ${MEDIA_IMAGE_FOURNISSEUR:-}
+      MEDIA_VIDEO_FOURNISSEUR: ${MEDIA_VIDEO_FOURNISSEUR:-}
+      MEDIA_DOCUMENT_FOURNISSEUR: ${MEDIA_DOCUMENT_FOURNISSEUR:-}
+      MEDIA_TAILLE_MAX_MO: ${MEDIA_TAILLE_MAX_MO:-16}
     depends_on:
       base:
         condition: service_healthy
@@ -26,6 +85,13 @@ services:
     volumes:
       # Les documents métier et la configuration vivent hors de l'image : on
       # peut les modifier depuis la console sans reconstruire quoi que ce soit.
+      #
+      # ⚠️ Chez un hébergeur, vérifiez ce que deviennent ces deux montages.
+      # Coolify et consorts les reprennent volontiers en « stockage persistant » :
+      # le contenu du PREMIER déploiement est alors figé, et les fichiers
+      # poussés ensuite dans Git n'atteignent plus jamais le conteneur. On
+      # redéploie, rien ne change, et aucune erreur n'apparaît nulle part.
+      # Voir HEBERGEMENT.md § 4 pour le diagnostic et les deux issues.
       - ./knowledge:/app/knowledge
       - ./config:/app/config
 

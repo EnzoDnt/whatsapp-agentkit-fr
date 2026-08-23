@@ -68,9 +68,20 @@ class FournisseurSimulateur(FournisseurMeta):
     def __init__(self) -> None:
         # On force un secret présent : le simulateur signe réellement ses webhooks,
         # donc on n'emprunte jamais le chemin « non signé ».
-        os.environ.setdefault("META_APP_SECRET", SECRET_SIMULATEUR)
-        os.environ.setdefault("META_ACCESS_TOKEN", "simulateur")
-        os.environ.setdefault("META_PHONE_NUMBER_ID", "simulateur")
+        #
+        # setdefault ne suffit PAS ici : .env.example livre META_APP_SECRET=
+        # (vide), et python-dotenv place bien la variable dans l'environnement,
+        # avec une chaîne vide pour valeur. setdefault la voit « déjà définie »
+        # et s'abstient. Le simulateur signe alors avec SECRET_SIMULATEUR
+        # pendant que la vérification attend "" : tout message renvoie 401,
+        # dès l'étape 1, alors que la personne a suivi la procédure à la lettre.
+        for cle, valeur in (
+            ("META_APP_SECRET", SECRET_SIMULATEUR),
+            ("META_ACCESS_TOKEN", "simulateur"),
+            ("META_PHONE_NUMBER_ID", "simulateur"),
+        ):
+            if not os.environ.get(cle, "").strip():
+                os.environ[cle] = valeur
         super().__init__()
 
     async def envoyer_message(

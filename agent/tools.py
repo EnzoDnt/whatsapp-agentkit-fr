@@ -103,6 +103,21 @@ def charger_config_metier() -> dict:
 # ── Outils ───────────────────────────────────────────────────────────────
 
 
+# Mots vides du français. Sans eux, abaisser le seuil à deux caractères ferait
+# entrer « de », « la », « et », qui figurent sur presque chaque ligne : les 25
+# résultats se rempliraient de bruit et la bonne ligne passerait à la trappe.
+# Avec eux, on peut enfin chercher les sigles courts — « WC », « PV », « m2 » —
+# que l'ancien seuil de trois caractères rendait introuvables.
+MOTS_VIDES = frozenset("""
+au aux avec ce ces dans de des du elle en et eux il ils je la le les leur lui
+ma mais me meme mes moi mon ne nos notre nous on ou par pas pour qu que qui sa
+se ses son sur ta te tes toi ton tu un une vos votre vous y est sont etre avoir
+ai as ont eu ete cet cette celui ceux dont donc alors aussi comme plus moins
+tres bien fait faire dit vers chez sans sous entre apres avant depuis pendant
+combien quel quelle quels quelles quand comment pourquoi est-ce
+""".split())
+
+
 @outil(
     description=(
         "Recherche une information dans les documents de l'entreprise (tarifs, "
@@ -122,12 +137,36 @@ def charger_config_metier() -> dict:
     },
 )
 def rechercher_information(requete: str) -> str:
-    """Recherche plein texte simple dans les fichiers de knowledge/."""
+    """
+    Recherche plein texte simple dans les fichiers de knowledge/.
+
+    La recherche est littérale et travaille LIGNE PAR LIGNE : elle renvoie les
+    lignes qui contiennent les mots de la requête. Deux conséquences pour qui
+    rédige les documents de knowledge/ :
+
+    - Un fait doit tenir sur UNE seule ligne. Si l'intitulé et le prix sont
+      séparés par un retour à la ligne, la recherche renvoie l'un sans l'autre,
+      et le modèle complète le vide — c'est-à-dire invente un tarif.
+    - Il n'y a pas de racinisation : « livrer » ne trouve pas « livraison ».
+      Écrivez les variantes utiles sur la même ligne, accentuées et non
+      accentuées.
+    """
     if not DOSSIER_KNOWLEDGE.is_dir():
         return "Aucun document d'entreprise disponible."
 
-    mots = [m for m in re.split(r"\W+", requete.lower()) if len(m) > 2]
-    trouvailles: list[str] = []
+    mots = [
+        m
+        for m in re.split(r"\W+", requete.lower())
+        if len(m) >= 2 and m not in MOTS_VIDES
+    ]
+    if not mots:
+        return f"Aucune information trouvée pour '{requete}' dans les documents."
+
+    # (nombre de mots distincts trouvés, ligne) : une ligne qui répond à
+    # « pain sans gluten » sur les trois mots passe avant celle qui n'a que
+    # « pain ». Sans ce classement, le plafond de 25 lignes se remplit dans
+    # l'ordre des fichiers et la bonne réponse peut rester dehors.
+    trouvailles: list[tuple[int, str]] = []
 
     for chemin in sorted(DOSSIER_KNOWLEDGE.iterdir()):
         if chemin.name.startswith(".") or not chemin.is_file():
@@ -137,12 +176,18 @@ def rechercher_information(requete: str) -> str:
         except (UnicodeDecodeError, OSError):
             continue
         for ligne in contenu.splitlines():
-            if any(m in ligne.lower() for m in mots) and ligne.strip():
-                trouvailles.append(ligne.strip())
+            if not ligne.strip():
+                continue
+            minuscule = ligne.lower()
+            touches = sum(1 for m in mots if m in minuscule)
+            if touches:
+                trouvailles.append((touches, ligne.strip()))
 
     if not trouvailles:
         return f"Aucune information trouvée pour '{requete}' dans les documents."
-    return "\n".join(trouvailles[:25])
+
+    trouvailles.sort(key=lambda t: t[0], reverse=True)
+    return "\n".join(ligne for _, ligne in trouvailles[:25])
 
 
 @outil(
@@ -186,7 +231,10 @@ def verifier_delai(type_prestation: str, date_souhaitee: str) -> str:
         return (
             f"REFUSÉ : '{type_prestation}' exige {heures} h de délai. "
             f"La date la plus proche possible est le {minimum:%d/%m/%Y à %H:%M}. "
-            "Proposez cette date ou une date ultérieure au client."
+            "Cette heure est une BORNE TECHNIQUE, pas une proposition : ne la "
+            "cite pas telle quelle au client (« à partir de 16h02 » ne veut "
+            "rien dire pour lui). Propose le premier créneau d'ouverture qui "
+            "commence après cette borne."
         )
     return f"ACCEPTÉ : le {souhaitee:%d/%m/%Y à %H:%M} respecte le délai de {heures} h."
 
@@ -297,8 +345,22 @@ async def passer_la_main(
         await basculer_pause_conversation(telephone, True)
 
     logger.info(f"Escalade #{ref} ({urgence}) : {motif[:70]}")
+    # Cette chaîne est lue par le modèle, pas par un humain : elle dicte
+    # littéralement le dernier message reçu par le client. Formulée seulement
+    # comme « dis qu'un humain revient », elle produit exactement cela — et
+    # efface tout le reste, y compris les consignes de sécurité déjà rédigées.
+    # Observé en conditions réelles : sur une odeur de gaz, le client recevait
+    # une phrase d'attente à la place de « coupez le compteur, appelez GRDF ».
     return (
         f"Escalade #{ref} transmise à l'équipe. Tu ne réponds plus sur cette "
-        "conversation. Dis au client qu'un membre de l'équipe revient vers lui, "
-        "sans annoncer de délai."
+        "conversation après ce message.\n"
+        "Ton message au client doit contenir, dans cet ordre : "
+        "(1) un récapitulatif en une phrase de ce que tu as compris ; "
+        "(2) les consignes de sécurité ou gestes d'urgence s'il y en a — ils ne "
+        "sont JAMAIS supprimés, la sécurité prime sur la concision ; "
+        "(3) ce qui manque encore, le cas échéant ; "
+        "(4) enfin, qu'un membre de l'équipe revient vers lui, sans annoncer "
+        "de délai.\n"
+        "Ne réponds jamais par la seule phrase d'attente : un client qui vient "
+        "de décrire sa situation croirait ne pas avoir été lu."
     )
