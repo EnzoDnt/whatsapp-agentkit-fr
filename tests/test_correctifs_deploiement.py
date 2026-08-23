@@ -301,3 +301,155 @@ async def test_openai_retombe_sans_effort_si_le_modele_refuse():
     assert "reasoning_effort" in c.client.appels[0]
     assert "reasoning_effort" not in c.client.appels[1]
     assert c._supporte_effort_none is False
+
+
+def test_toute_variable_lue_par_le_code_est_transmise_au_conteneur():
+    """
+    Une variable réglée chez l'hébergeur mais absente du bloc environment est
+    ignorée en silence : docker compose ne transmet pas l'environnement de
+    l'hôte au conteneur. C'est ainsi qu'ANTHROPIC_MAX_TOKENS, pourtant
+    documentée dans .env.example, restait sans effet une fois déployée.
+
+    Ce test rattrape l'oubli à chaque ajout de variable, ce qu'une relecture
+    humaine ne fait pas de façon fiable.
+    """
+    import pathlib
+
+    import yaml
+
+    racine = pathlib.Path(__file__).resolve().parent.parent
+
+    lues: set[str] = set()
+    for f in (racine / "agent").glob("**/*.py"):
+        t = f.read_text(encoding="utf-8")
+        lues |= set(re.findall(r'os\.(?:getenv|environ\.get)\(\s*["\']([A-Z_0-9]+)["\']', t))
+        lues |= set(re.findall(r'os\.environ\[\s*["\']([A-Z_0-9]+)["\']', t))
+
+    compose = yaml.safe_load((racine / "docker-compose.yaml").read_text(encoding="utf-8"))
+    passees = set(compose["services"]["agent"]["environment"])
+
+    # Posées par l'hébergeur ou construites par le compose lui-même.
+    hebergeur = {
+        "RAILWAY_ENVIRONMENT", "COOLIFY_URL", "RENDER", "FLY_APP_NAME", "PORT",
+        "DYNO", "KUBERNETES_SERVICE_HOST", "DATABASE_URL", "SOURCE_COMMIT",
+        "COOLIFY_CONTAINER_NAME", "RAILWAY_PROJECT_ID", "RENDER_SERVICE_ID",
+    }
+
+    oubliees = sorted(lues - passees - hebergeur)
+    assert not oubliees, (
+        "variables lues par le code mais non transmises au conteneur "
+        f"(elles seraient ignorées en silence une fois déployées) : {oubliees}"
+    )
+
+
+# ── Exemples livrés ──────────────────────────────────────────────────────
+
+
+def _racine():
+    import pathlib
+
+    return pathlib.Path(__file__).resolve().parent.parent
+
+
+def test_l_exemple_plomberie_est_complet_et_valide():
+    """Un exemple cassé se recopie tel quel chez un client."""
+    import yaml
+
+    base = _racine() / "exemples" / "plomberie"
+    entreprise = yaml.safe_load((base / "entreprise.yaml").read_text(encoding="utf-8"))
+    prompts = yaml.safe_load((base / "prompts.yaml").read_text(encoding="utf-8"))
+
+    assert entreprise["delais_heures"], "delais_heures est le seul bloc lu par le code"
+    for cle in ("system_prompt", "fallback_message", "error_message", "quota_message"):
+        assert prompts.get(cle), f"{cle} manquant dans l'exemple"
+
+    docs = list((base / "knowledge").glob("*.md"))
+    assert len(docs) >= 5, "l'exemple complet doit montrer plusieurs documents"
+
+
+def test_les_exemples_ne_citent_que_des_outils_existants():
+    """Même garde que pour prompts.exemple.yaml, appliquée au second exemple."""
+    import yaml
+
+    from agent.tools import schemas_outils
+
+    reels = {o["name"] for o in schemas_outils()}
+    texte = (_racine() / "exemples" / "plomberie" / "prompts.yaml").read_text(encoding="utf-8")
+    cites = set(re.findall(r"\b([a-z]+_[a-z_]+)\b", texte))
+    suspects = {c for c in cites if c.endswith(("_information", "_delai", "_demande", "_humain", "_main"))}
+    assert not (suspects - reels), f"outils inexistants : {suspects - reels}"
+
+
+# Numéros publics d'urgence : ils DOIVENT rester exacts. Les fausser dans un
+# exemple de consigne de sécurité serait dangereux pour qui recopie le fichier.
+NUMEROS_PUBLICS = {"0 800 47 33 33"}
+
+# Plages françaises non attribuées, réservées à la documentation.
+PREFIXES_FICTIFS = ("01 99", "02 99", "03 99", "04 99", "05 99")
+
+
+def test_les_exemples_n_exposent_aucune_coordonnee_reelle():
+    """
+    Un dépôt public ne diffuse pas de téléphone ni d'adresse joignables : un
+    exemple se recopie, et l'entreprise citée recevrait de vrais appels.
+
+    Détection par motif plutôt que par liste noire — une liste noire ne protège
+    que des cas déjà connus, et fait figurer dans le dépôt les chaînes mêmes
+    qu'elle prétend en écarter.
+    """
+    base = _racine() / "exemples"
+    for f in list(base.rglob("*.md")) + list(base.rglob("*.yaml")):
+        t = f.read_text(encoding="utf-8")
+
+        for numero in re.findall(r"\b0\d(?:[ .]\d{2}){4}\b", t):
+            if numero in NUMEROS_PUBLICS:
+                continue
+            assert numero.startswith(PREFIXES_FICTIFS), (
+                f"{f.name} expose un numéro potentiellement réel : {numero}. "
+                "Utilisez une plage fictive (01 99 ...) ou ajoutez-le aux "
+                "numéros publics s'il s'agit d'un service d'urgence."
+            )
+
+        for adresse in re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", t):
+            assert adresse.endswith(("@exemple.fr", "@exemple.com", "example.com")), (
+                f"{f.name} expose une adresse potentiellement réelle : {adresse}"
+            )
+
+
+def test_les_faits_de_l_exemple_sont_trouvables(tmp_path, monkeypatch):
+    """
+    L'exemple sert de démonstration de rédaction : ses propres documents doivent
+    être trouvables par la recherche du kit, sinon il enseigne le contraire de
+    ce qu'il prêche.
+    """
+    import importlib
+    import shutil
+
+    source = _racine() / "exemples" / "plomberie" / "knowledge"
+    monkeypatch.chdir(tmp_path)
+    shutil.copytree(source, tmp_path / "knowledge")
+
+    import agent.tools as tools
+
+    importlib.reload(tools)
+
+    for requete, attendu in (
+        ("deboucher WC", "149"),
+        ("entretien chaudiere", "159"),
+        ("Bagnolet", "nous intervenons"),
+        ("odeur de gaz", "0 800 47 33 33"),
+        ("garantie depannage", "1 an"),
+        ("qui soccupe des salles de bain", "Sofia"),
+        ("intervenez vous a Meaux", "n'intervenons pas"),
+    ):
+        resultat = tools.rechercher_information(requete)
+        assert attendu.lower() in resultat.lower(), (
+            f"'{requete}' ne trouve pas '{attendu}' dans l'exemple livré"
+        )
+
+    # Sur une question tarifaire, la bonne ligne doit en plus arriver EN TÊTE :
+    # c'est elle que le modèle recopie, et une ligne voisine le ferait annoncer
+    # un prix qui n'est pas celui demandé.
+    for requete, attendu in (("deboucher WC", "149"), ("entretien chaudiere", "159")):
+        premiere = tools.rechercher_information(requete).splitlines()[0]
+        assert attendu in premiere, f"'{requete}' : mauvaise ligne en tête — {premiere}"
