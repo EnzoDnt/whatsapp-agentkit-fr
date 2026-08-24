@@ -6,6 +6,8 @@ knowledge/*
 !knowledge/.gitkeep
 config/entreprise.yaml
 config/prompts.yaml
+# Coordonnees, immatriculation et contacts du client
+config/juridique.yaml
 __pycache__/
 *.py[cod]
 .venv/

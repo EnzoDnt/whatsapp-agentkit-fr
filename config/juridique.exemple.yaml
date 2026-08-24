@@ -1,0 +1,129 @@
+# Informations juridiques — servent à générer les documents publiés sur /legal.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+#  CES DOCUMENTS DOIVENT ÊTRE RELUS PAR UN JURISTE OU UN AVOCAT.
+#
+#  Les gabarits du kit sont un point de départ sérieux : ils couvrent ce que
+#  Meta exige et ce que le RGPD impose dans le cas courant. Ils ne sont PAS un
+#  avis juridique, et personne ici ne connaît votre activité, vos contrats, ni
+#  les traitements que vous menez par ailleurs.
+#
+#  Un document généré et jamais relu vous expose plus qu'il ne vous protège :
+#  il prouve que vous aviez conscience de l'obligation. Comptez une heure de
+#  relecture par un professionnel — c'est peu au regard de ce que couvre
+#  une politique de confidentialité inexacte.
+#
+#  Tant que revue_juridique.effectuee vaut false, les pages publiées portent
+#  un bandeau d'avertissement bien visible. C'est délibéré.
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Ce fichier ne demande QUE ce que le kit ne peut pas deviner. La durée de
+# conservation, le fournisseur d'IA, le mode de transparence et le masquage des
+# journaux sont lus dans votre .env : ne les répétez pas ici, ils seraient
+# contredits au premier changement de configuration.
+#
+# Copiez-le en config/juridique.yaml et remplissez-le. Comme le reste de
+# config/, il est exclu du dépôt public.
+
+# ─── Qui déploie ──────────────────────────────────────────────────────────
+# direct  : l'entreprise déploie son propre agent. Elle est seule responsable
+#           de traitement. C'est le cas le plus simple.
+# agence  : un intégrateur déploie pour le compte d'un client. Le client reste
+#           responsable de traitement, l'intégrateur devient sous-traitant, et
+#           une annexe de sous-traitance (art. 28 RGPD) est générée en plus.
+mode: direct
+
+# ─── L'entreprise (responsable de traitement) ─────────────────────────────
+entreprise:
+  raison_sociale: "Maison Lorette"
+  forme_juridique: "SARL au capital de 20 000 EUR"
+  immatriculation: "RCS Lyon 000 000 000"          # SIREN/SIRET ou équivalent
+  tva_intracommunautaire: "FR00000000000"          # facultatif
+  adresse: "14 rue Bossuet, 69006 Lyon, France"
+  telephone: "01 99 00 00 00"
+  email: "contact@exemple.fr"
+  representant_legal: "Camille Lorette, gérante"
+  site_web: "https://exemple.fr"                   # facultatif
+
+# ─── Hébergeur (obligatoire dans les mentions légales — LCEN art. 6) ──────
+# Celui qui héberge l'agent, pas votre site vitrine.
+hebergeur:
+  nom: "Hetzner Online GmbH"
+  adresse: "Industriestr. 25, 91710 Gunzenhausen, Allemagne"
+  telephone: "+49 9831 505-0"
+  pays_donnees: "Allemagne"        # où vivent physiquement les données
+
+# ─── Contact protection des données ───────────────────────────────────────
+# Un DPO n'est obligatoire que dans trois cas (art. 37 RGPD) : organisme
+# public, suivi à grande échelle, ou données sensibles à grande échelle. Une
+# TPE qui répond à ses clients n'en a normalement pas besoin — mais une adresse
+# de contact reste obligatoire, et Meta la réclame dans les paramètres de l'app.
+protection_donnees:
+  dpo_designe: false
+  nom: "Camille Lorette"
+  email: "donnees@exemple.fr"
+  telephone: ""                    # facultatif
+
+# ─── L'intégrateur (uniquement si mode: agence) ───────────────────────────
+# integrateur:
+#   raison_sociale: "Studio Exemple SAS"
+#   immatriculation: "RCS Paris 000 000 000"
+#   adresse: "1 rue de l'Exemple, 75001 Paris, France"
+#   email: "contact@studio-exemple.fr"
+#   contact_donnees: "rgpd@studio-exemple.fr"
+
+# ─── Le traitement ────────────────────────────────────────────────────────
+traitement:
+  # À quoi sert l'agent. Soyez concret : « répondre aux questions » est trop
+  # vague pour être une finalité au sens du RGPD.
+  finalites:
+    - "répondre aux questions des clients sur les produits, les horaires et les tarifs"
+    - "enregistrer les demandes de commande et de rendez-vous"
+    - "transmettre à un membre de l'équipe les demandes qui le nécessitent"
+
+  # interet_legitime : le plus courant. Le client écrit le premier, on répond.
+  # contrat          : si la conversation exécute un contrat déjà conclu.
+  # consentement     : nécessaire pour la prospection et les messages sortants.
+  base_legale: "interet_legitime"
+
+  # Ce que vous recevez réellement. N'en listez pas plus que nécessaire.
+  donnees_traitees:
+    - "numéro de téléphone WhatsApp"
+    - "nom affiché sur le profil WhatsApp"
+    - "contenu des messages envoyés à l'agent"
+    - "fichiers envoyés : photos, notes vocales, documents"
+
+  # Comment l'opt-in a été obtenu (exigé par la politique de messagerie Meta).
+  # Le client vous écrit le premier = opt-in implicite pour la réponse, mais
+  # PAS pour de la prospection ultérieure.
+  opt_in: "le client initie la conversation en écrivant au numéro de l'entreprise"
+
+# ─── Juridiction ──────────────────────────────────────────────────────────
+juridiction:
+  pays: "France"
+  droit_applicable: "droit français"
+  tribunal: "tribunaux du ressort de Lyon"
+  autorite_controle: "CNIL"
+  autorite_controle_url: "https://www.cnil.fr/fr/plaintes"
+
+# ─── Publication ──────────────────────────────────────────────────────────
+publication:
+  # L'URL publique de l'agent. Sert à construire les liens des documents,
+  # ceux que vous collerez dans les paramètres de l'app Meta.
+  url_publique: "https://agent.exemple.fr"
+  # Date de dernière révision. Mettez-la à jour à chaque modification :
+  # une politique sans date datée n'inspire aucune confiance.
+  derniere_revision: "2026-08-24"
+
+# ─── Revue juridique ──────────────────────────────────────────────────────
+# Passez effectuee à true UNIQUEMENT après relecture par un juriste ou un
+# avocat. Tant que c'est false, chaque page publiée affiche un bandeau
+# « document non relu par un professionnel du droit » — visible de vos
+# clients, et de Meta si un examinateur ouvre l'URL.
+#
+# Ce n'est pas une formalité : c'est le garde-fou qui évite qu'un brouillon
+# généré en deux minutes finisse en production pendant trois ans.
+revue_juridique:
+  effectuee: false
+  par: ""              # nom du cabinet ou du juriste
+  date: ""             # AAAA-MM-JJ

@@ -70,7 +70,26 @@ Il **agit**, il ne fait pas que discuter. Quatre outils réellement exécutés :
 - `rechercher_information` — puise dans vos documents (`knowledge/`) au lieu d'inventer
 - `verifier_delai` — refuse une date impossible, **vérifiée en code**, pas par le prompt
 - `enregistrer_demande` — écrit la commande sur disque pour votre équipe
-- `transferer_a_humain` — escalade une réclamation
+- `passer_la_main` — escalade une réclamation
+
+---
+
+## Deux exemples complets
+
+Le kit livre deux configurations métier de bout en bout — voir
+[`exemples/README.md`](exemples/README.md).
+
+- **Maison Lorette**, boulangerie-pâtisserie : la version minimale, dans
+  `config/*.exemple.yaml`. Elle montre la structure des fichiers.
+- **Mario les Bons Tuyaux**, plomberie : la version complète, dans
+  `exemples/plomberie/`. Sept documents, une zone d'intervention commune par
+  commune, des consignes de sécurité, un périmètre métier explicite.
+
+Le second vaut surtout pour ce qu'il montre de la **rédaction** : la recherche
+dans `knowledge/` est littérale et travaille ligne par ligne, ce qui impose
+d'écrire un fait par ligne, avec les synonymes et les variantes accentuées.
+Un intitulé séparé de son prix par un retour à la ligne, et le modèle reçoit
+une moitié d'information — puis comble le vide.
 
 ---
 

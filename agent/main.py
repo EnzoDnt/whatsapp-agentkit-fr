@@ -149,6 +149,48 @@ async def sante():
     return {"statut": "actif"}
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# Documents juridiques
+# ═════════════════════════════════════════════════════════════════════════
+#
+# Meta exige une URL de politique de confidentialité et une URL d'instructions
+# de suppression dans les paramètres de l'app. L'agent ayant déjà une adresse
+# HTTPS publique, il sert ses propres documents : une page hébergée ailleurs se
+# désynchronise toujours de la configuration réelle, et une politique qui
+# annonce 90 jours de conservation quand la variable en vaut 30 est pire qu'une
+# absence de politique.
+#
+# Les routes ne sont montées que si config/juridique.yaml existe : sans lui, on
+# n'a rien de vrai à publier.
+
+
+@app.get("/legal", include_in_schema=False)
+@app.get("/legal/{document}", include_in_schema=False)
+async def page_juridique(document: str = "confidentialite"):
+    from fastapi.responses import HTMLResponse
+
+    from agent.juridique import charger, contexte, documents_disponibles, page_html
+
+    conf = charger()
+    if conf is None:
+        raise HTTPException(
+            404,
+            "Aucun document juridique publié : config/juridique.yaml est absent. "
+            "Copiez config/juridique.exemple.yaml et remplissez-le.",
+        )
+
+    c = contexte(conf)
+    dispo = documents_disponibles(c)
+    if document not in dispo:
+        raise HTTPException(404, f"Document inconnu. Disponibles : {', '.join(dispo)}")
+
+    titre, generer = dispo[document]
+    entreprise = (c.get("entreprise") or {}).get("raison_sociale", "")
+    return HTMLResponse(
+        page_html(f"{titre} — {entreprise}".strip(" —"), generer(c), c)
+    )
+
+
 @app.get("/webhook")
 async def verification_webhook(request: Request):
     """Vérification GET demandée par Meta lors de l'abonnement."""
@@ -415,8 +457,15 @@ if est_developpement_declare():
 
     @app.post("/simulateur/reinitialiser")
     async def simulateur_reinitialiser():
+        from agent.memory import basculer_pause_conversation
         from agent.providers.simulateur import TELEPHONE_SIMULE
 
         await file_sortante.vider()
         n = await effacer_historique(TELEPHONE_SIMULE)
+        # On lève aussi la mise en attente humaine. Une escalade pendant les
+        # essais met la conversation en pause — c'est voulu en production, mais
+        # ici « réinitialiser » n'effaçait que l'historique : l'agent restait
+        # muet pour toujours, sans que rien ne l'explique, et le simulateur
+        # semblait cassé alors qu'il faisait exactement son travail.
+        await basculer_pause_conversation(TELEPHONE_SIMULE, False)
         return {"statut": "ok", "messages_effaces": n}

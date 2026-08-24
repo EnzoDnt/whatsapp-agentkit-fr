@@ -258,6 +258,38 @@ nouvelle, puis `devtools_webhook_test` pour confirmer que Meta atteint le serveu
 Sans MCP, c'est l'abonnement manuel de `SETUP-META.md` § 4, avec l'adresse
 définitive.
 
+**2 bis. La configuration métier arrive-t-elle vraiment ? — le piège du stockage persistant**
+
+Le `docker-compose.yaml` monte `./config` et `./knowledge` depuis le dépôt, pour
+qu'on puisse éditer le prompt et déposer des documents depuis la console sans
+reconstruire l'image. Utile en exploitation, piégeux au déploiement.
+
+Coolify — et d'autres — reprennent volontiers ces deux chemins en **stockage
+persistant**. Le contenu du PREMIER déploiement est alors figé : les fichiers
+poussés ensuite dans Git n'atteignent plus jamais le conteneur. On pousse, on
+redéploie, la console affiche un déploiement réussi, et **rien ne change**.
+Aucune erreur, nulle part. Le symptôme n'apparaît qu'à la première question d'un
+client, à laquelle l'agent répond comme s'il ne savait rien.
+
+✅ **Vérifie-le, ne le suppose pas.** Après le déploiement, pose à l'agent une
+question dont la réponse ne peut venir que d'un document récemment ajouté. S'il
+l'ignore, c'est ce piège.
+
+Deux issues, au choix :
+
+- **Garder les montages** (l'édition depuis la console reste possible) : dans
+  l'hébergeur, supprime les entrées de stockage persistant pointant vers
+  `/app/config` et `/app/knowledge`, puis redéploie. Les montages redeviennent
+  des liens vers le dépôt.
+- **Retirer les montages** du `docker-compose.yaml` : la configuration voyage
+  alors dans l'image, reconstruite à chaque déploiement, et le dépôt devient la
+  source unique de vérité. Contrepartie assumée : toute modification faite
+  depuis la console est écrasée au déploiement suivant, il faut la porter dans
+  le dépôt. Les consignes ponctuelles, elles, vivent en base et ne sont pas
+  concernées.
+
+Pour un déploiement piloté depuis Git, la seconde est la plus sûre.
+
 **3. Un vrai message de bout en bout**
 
 🔴 Demande-lui d'écrire depuis son téléphone. ✅ Vérifie dans les journaux de

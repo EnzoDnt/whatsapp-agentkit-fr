@@ -1,0 +1,64 @@
+# Mario les Bons Tuyaux — configuration metier.
+#
+# ATTENTION : seul le bloc delais_heures est lu par le code (outil
+# verifier_delai). Le reste documente l'entreprise pour les humains qui
+# reprennent ce fichier ; l'identite de l'agent vit dans config/prompts.yaml,
+# et son savoir dans knowledge/.
+
+entreprise:
+  nom: "Mario les Bons Tuyaux"
+  forme: "SARL au capital de 15 000 EUR — SIRET 000 000 000 00000 (fictif)"
+  activite: >
+    Plomberie, chauffage et sanitaire. Depannage d'urgence, entretien de
+    chaudieres, installation et renovation de salles de bain.
+    Clientele : particuliers, syndics de copropriete, petits commerces
+    (boulangeries, restaurants, coiffeurs).
+  adresse: "27 rue des Cascades, 93100 Montreuil"
+  telephone: "01 99 00 00 00"
+  email: "contact@exemple.fr"
+  assurance: "Garantie decennale (assureur et n. de contrat a renseigner) — RC Pro incluse"
+  horaires: >
+    Atelier et standard : lundi au vendredi 8h00-19h00, samedi 9h00-17h00.
+    Ferme le dimanche. Astreinte urgence 24h/24 et 7j/7, jours feries compris.
+  zone: >
+    Paris intra-muros, Seine-Saint-Denis (93) en entier, nord du Val-de-Marne
+    (Vincennes, Saint-Mande, Charenton-le-Pont, Ivry-sur-Seine).
+    Hors zone : aucune intervention, meme en urgence.
+
+agent:
+  nom: "Giulia"
+  ton: "professionnel, rassurant et direct"
+  cas_usage:
+    - "qualifier les demandes et detecter les urgences"
+    - "verifier que l'adresse est dans la zone couverte"
+    - "communiquer les tarifs sans jamais les inventer"
+    - "proposer un creneau realiste selon le type d'intervention"
+    - "prendre les demandes de devis et de rendez-vous"
+    - "passer la main a un humain quand la situation le demande"
+
+equipe:
+  - nom: "Mario Fontana"
+    role: "Gerant, plombier-chauffagiste"
+    specialite: "chaudieres gaz, installations complexes"
+  - nom: "Karim Belkacem"
+    role: "Plombier-chauffagiste confirme"
+    specialite: "recherche de fuite, degorgement"
+  - nom: "Sofia Marchetti"
+    role: "Plombiere, referente salles de bain"
+    specialite: "renovation, pose sanitaire"
+  - nom: "Tom Lefevre"
+    role: "Apprenti 2e annee"
+    specialite: "accompagne, jamais seul en intervention"
+  - nom: "Nadia Berthier"
+    role: "Assistante d'exploitation"
+    specialite: "planning, devis, facturation, syndics"
+
+# Delais minimaux en heures, VERIFIES EN CODE par l'outil verifier_delai.
+# Le modele ne peut pas les contourner par complaisance : c'est le point
+# ou l'on refuse une promesse intenable, quelle que soit l'insistance.
+delais_heures:
+  urgence: 0        # fuite active, degat des eaux, odeur de gaz : immediat
+  depannage: 4      # panne sans gravite immediate
+  entretien: 48     # entretien chaudiere, detartrage : sur planning
+  devis: 24         # visite technique de chiffrage
+  chantier: 72      # renovation, creation de reseau
