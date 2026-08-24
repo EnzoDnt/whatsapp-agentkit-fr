@@ -1,0 +1,190 @@
+"""Documents juridiques publiés par l'agent."""
+
+import re
+import shutil
+from pathlib import Path
+
+import pytest
+import yaml
+
+RACINE = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture()
+def conf(tmp_path, monkeypatch):
+    """Une configuration juridique valide, dans un dossier de travail isolé."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    shutil.copy(
+        RACINE / "config" / "juridique.exemple.yaml",
+        tmp_path / "config" / "juridique.yaml",
+    )
+    monkeypatch.setenv("RETENTION_JOURS", "90")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("MODE_TRANSPARENCE", "discrete")
+    monkeypatch.setenv("LOG_MESSAGE_CONTENT", "false")
+    # agent.main appelle load_dotenv() à l'import : le .env du poste de
+    # développement entre alors dans os.environ et y reste. Sans ce nettoyage,
+    # un MEDIA_AUDIO_FOURNISSEUR local ferait apparaître un sous-traitant que
+    # le test n'a pas demandé — et le résultat dépendrait de la machine.
+    for var in ("MEDIA_FOURNISSEUR", "MEDIA_AUDIO_FOURNISSEUR",
+                "MEDIA_IMAGE_FOURNISSEUR", "MEDIA_VIDEO_FOURNISSEUR",
+                "MEDIA_DOCUMENT_FOURNISSEUR"):
+        monkeypatch.delenv(var, raising=False)
+    import importlib
+
+    import agent.juridique as J
+
+    importlib.reload(J)
+    return J
+
+
+def test_les_documents_se_generent_sans_variable_orpheline(conf):
+    """Un « {e['nom']} » resté dans le texte se voit tout de suite en public."""
+    c = conf.contexte(conf.charger())
+    for cle, (_, generer) in conf.documents_disponibles(c).items():
+        texte = generer(c)
+        assert not re.search(r"\{[a-z_]", texte), f"{cle} : variable non substituée"
+        assert len(texte) > 800, f"{cle} : suspicieusement court"
+
+
+def test_la_configuration_du_kit_prime_sur_le_fichier(conf, monkeypatch):
+    """
+    Une politique qui annonce 90 jours quand RETENTION_JOURS en vaut 30 est pire
+    qu'une absence de politique : elle documente le manquement. La durée réelle
+    doit donc venir de l'environnement, jamais d'une valeur recopiée à la main.
+    """
+    monkeypatch.setenv("RETENTION_JOURS", "30")
+    c = conf.contexte(conf.charger())
+    texte = conf.politique_confidentialite(c)
+    assert "30 jours" in texte
+    assert "90 jours" not in texte
+
+
+def test_les_sous_traitants_suivent_le_fournisseur_choisi(conf, monkeypatch):
+    """Nommer les destinataires est une obligation (art. 13 RGPD)."""
+    monkeypatch.setenv("LLM_PROVIDER", "google")
+    c = conf.contexte(conf.charger())
+    noms = [t[0] for t in c["sous_traitants"]]
+    assert any("Google" in n for n in noms)
+    assert not any("OpenAI" in n for n in noms)
+    assert any("Meta" in n for n in noms), "Meta achemine les messages, toujours"
+
+
+def test_un_service_media_distinct_est_cite(conf, monkeypatch):
+    """Une deuxième clé pour les vocaux ajoute un destinataire à déclarer."""
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("MEDIA_AUDIO_FOURNISSEUR", "openai")
+    c = conf.contexte(conf.charger())
+    noms = [t[0] for t in c["sous_traitants"]]
+    assert any("Anthropic" in n for n in noms)
+    assert any("OpenAI" in n for n in noms)
+
+
+def test_le_bandeau_reste_tant_que_la_revue_n_est_pas_faite(conf):
+    """
+    C'est le garde-fou du dispositif : sans lui, un brouillon généré en deux
+    minutes reste en production pendant trois ans.
+    """
+    c = conf.contexte(conf.charger())
+    assert c["revue_faite"] is False
+    for _, generer in conf.documents_disponibles(c).values():
+        assert "non relu par un professionnel du droit" in generer(c)
+
+
+def test_le_bandeau_disparait_une_fois_la_revue_declaree(conf):
+    donnees = yaml.safe_load(Path("config/juridique.yaml").read_text(encoding="utf-8"))
+    donnees["revue_juridique"] = {
+        "effectuee": True, "par": "Cabinet Exemple", "date": "2026-08-24",
+    }
+    Path("config/juridique.yaml").write_text(yaml.safe_dump(donnees, allow_unicode=True), encoding="utf-8")
+    c = conf.contexte(conf.charger())
+    texte = conf.politique_confidentialite(c)
+    assert "non relu" not in texte
+    assert "Cabinet Exemple" in texte
+
+
+def test_l_annexe_de_sous_traitance_n_existe_qu_en_mode_agence(conf):
+    c = conf.contexte(conf.charger())
+    assert "sous-traitance" not in conf.documents_disponibles(c)
+
+    donnees = yaml.safe_load(Path("config/juridique.yaml").read_text(encoding="utf-8"))
+    donnees["mode"] = "agence"
+    donnees["integrateur"] = {"raison_sociale": "Studio Exemple SAS", "email": "x@exemple.fr"}
+    Path("config/juridique.yaml").write_text(yaml.safe_dump(donnees, allow_unicode=True), encoding="utf-8")
+
+    c = conf.contexte(conf.charger())
+    dispo = conf.documents_disponibles(c)
+    assert "sous-traitance" in dispo
+    assert "Studio Exemple SAS" in dispo["sous-traitance"][1](c)
+
+
+def test_la_politique_explique_comment_demander_la_suppression(conf):
+    """
+    Exigence explicite de Meta : « all apps must inform users in their privacy
+    policy how to request deletion of their data ».
+    """
+    c = conf.contexte(conf.charger())
+    texte = conf.politique_confidentialite(c)
+    assert "/legal/suppression" in texte
+    assert c["protection_donnees"]["email"] in texte
+
+
+def test_le_rendu_html_ne_laisse_pas_de_markdown(conf):
+    c = conf.contexte(conf.charger())
+    html = conf.page_html("T", conf.politique_confidentialite(c), c)
+    assert "<table>" in html and "<blockquote>" in html
+    assert "**" not in html
+    assert not re.search(r"\[[^\]]+\]\([^)]+\)", html), "lien markdown non converti"
+    assert 'name="robots"' in html, "ces pages n'ont pas à être indexées"
+
+
+def test_les_routes_legal_repondent(conf):
+    from fastapi.testclient import TestClient
+
+    import agent.main as main
+
+    client = TestClient(main.app)
+    for chemin in ("/legal", "/legal/confidentialite", "/legal/suppression",
+                   "/legal/cgu", "/legal/mentions", "/legal/ia"):
+        r = client.get(chemin)
+        assert r.status_code == 200, chemin
+        assert "text/html" in r.headers["content-type"]
+    assert client.get("/legal/inexistant").status_code == 404
+
+
+def test_sans_configuration_rien_n_est_publie(tmp_path, monkeypatch):
+    """Mieux vaut un 404 qu'un gabarit non rempli servi en public."""
+    monkeypatch.chdir(tmp_path)
+    import importlib
+
+    import agent.juridique as J
+
+    importlib.reload(J)
+    assert J.charger() is None
+
+    from fastapi.testclient import TestClient
+
+    import agent.main as main
+
+    assert TestClient(main.app).get("/legal/confidentialite").status_code == 404
+
+
+def test_l_exemple_livre_porte_l_avertissement_de_revue():
+    """Le fichier d'exemple doit lui-même appeler à la relecture."""
+    texte = (RACINE / "config" / "juridique.exemple.yaml").read_text(encoding="utf-8")
+    assert "RELUS PAR UN JURISTE OU UN AVOCAT" in texte
+    donnees = yaml.safe_load(texte)
+    assert donnees["revue_juridique"]["effectuee"] is False, (
+        "l'exemple ne doit jamais être livré avec la revue déclarée faite"
+    )
+
+
+def test_la_configuration_juridique_est_exclue_du_depot():
+    """
+    Elle porte la raison sociale, l'immatriculation, l'adresse et les contacts
+    du client. Rien de secret au sens d'une clé, mais rien qui ait à se
+    retrouver dans un dépôt public non plus.
+    """
+    lignes = (RACINE / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "config/juridique.yaml" in lignes
