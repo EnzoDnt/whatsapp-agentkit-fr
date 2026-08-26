@@ -86,23 +86,29 @@ def test_assumer_retire_le_bandeau_de_toutes_les_pages(env_propre, connecte):
     assert d["etat"]["bandeau"] is False
     assert d["etat"]["par"] == "Alex Durand, gérant"
 
-    # Le bandeau doit disparaître des pages RÉELLEMENT servies, pas seulement
-    # de l'état affiché dans la console.
+    # L'avertissement de console disparaît ; les pages publiques, elles,
+    # n'en portaient déjà aucun.
+    assert connecte.get("/admin/juridique").json()["avertissement"] is None
     for cle in ("confidentialite", "cgu", "mentions", "suppression", "ia"):
         page = connecte.get(f"/legal/{cle}")
         assert page.status_code == 200
-        assert "non relu" not in page.text.lower(), f"{cle} affiche encore le bandeau"
+        assert "non relu" not in page.text.lower()
 
 
-def test_revenir_en_arriere_remet_le_bandeau(env_propre, connecte):
+def test_revenir_en_arriere_remet_l_avertissement_de_console(env_propre, connecte):
     """Une décision doit pouvoir se défaire : c'est un réglage, pas un aller simple."""
     _installer(env_propre)
     connecte.post("/admin/juridique/decision",
                   json={"decision": "assumee", "par": "Alex Durand"})
-    connecte.post("/admin/juridique/decision", json={"decision": "aucune", "par": ""})
+    assert connecte.get("/admin/juridique").json()["avertissement"] is None
 
-    assert connecte.get("/admin/juridique").json()["etat"]["bandeau"] is True
-    assert "non relu" in connecte.get("/legal/confidentialite").text.lower()
+    connecte.post("/admin/juridique/decision", json={"decision": "aucune", "par": ""})
+    d = connecte.get("/admin/juridique").json()
+    assert d["etat"]["decision"] == "aucune"
+    assert d["avertissement"] is not None
+
+    # La page publique, elle, ne porte JAMAIS d'avertissement.
+    assert "non relu" not in connecte.get("/legal/confidentialite").text.lower()
 
 
 def test_une_decision_anonyme_est_refusee(env_propre, connecte):

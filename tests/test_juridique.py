@@ -81,16 +81,6 @@ def test_un_service_media_distinct_est_cite(conf, monkeypatch):
     assert any("OpenAI" in n for n in noms)
 
 
-def test_le_bandeau_reste_tant_que_la_revue_n_est_pas_faite(conf):
-    """
-    C'est le garde-fou du dispositif : sans lui, un brouillon généré en deux
-    minutes reste en production pendant trois ans.
-    """
-    c = conf.contexte(conf.charger())
-    assert c["revue_faite"] is False
-    for _, generer in conf.documents_disponibles(c).values():
-        assert "non relu par un professionnel du droit" in generer(c)
-
 
 def test_le_bandeau_disparait_une_fois_la_revue_declaree(conf):
     donnees = yaml.safe_load(Path("config/juridique.yaml").read_text(encoding="utf-8"))
@@ -133,10 +123,10 @@ def test_la_politique_explique_comment_demander_la_suppression(conf):
 def test_le_rendu_html_ne_laisse_pas_de_markdown(conf):
     c = conf.contexte(conf.charger())
     html = conf.page_html("T", conf.politique_confidentialite(c), c)
-    assert "<table>" in html and "<blockquote>" in html
+    assert "<table>" in html
     assert "**" not in html
     assert not re.search(r"\[[^\]]+\]\([^)]+\)", html), "lien markdown non converti"
-    assert 'name="robots"' in html, "ces pages n'ont pas à être indexées"
+    # Plus de noindex : voir test_les_pages_juridiques_restent_indexables.
 
 
 def test_les_routes_legal_repondent(conf):
@@ -372,67 +362,127 @@ def _ctx(revue: dict):
     return contexte({"revue_juridique": revue, "hebergeur": {}})
 
 
-def test_sans_decision_le_bandeau_est_affiche():
+
+
+
+
+
+def test_un_paragraphe_sur_plusieurs_lignes_reste_un_seul_paragraphe(conf):
     """
-    L'état par défaut. Le bandeau n'est pas une punition : il empêche qu'un
-    document sorte sans que personne ait tranché.
+    Le convertisseur vidait le paragraphe AVANT d'ajouter chaque ligne : chaque
+    ligne source devenait un <p>, et tout ce qui s'étendait au-delà d'une ligne
+    — un **gras**, un [lien](…) — restait affiché en markdown brut au client.
     """
-    from agent.juridique import _bandeau
-
-    assert "non relu" in _bandeau(_ctx({})).lower()
-
-
-def test_apres_relecture_le_bandeau_disparait():
-    from agent.juridique import _bandeau
-
-    assert _bandeau(_ctx({"effectuee": True, "par": "Cabinet X"})) == ""
+    html = conf._md_vers_html(
+        "Une phrase avec du **gras\nqui court sur deux lignes** et un\n"
+        "[lien](https://exemple.test) coupé lui aussi."
+    )
+    assert html.count("<p>") == 1, "le paragraphe a été coupé"
+    assert "<strong>" in html and "**" not in html
+    assert '<a href="https://exemple.test">' in html
 
 
-def test_publication_assumee_retire_le_bandeau():
+def test_une_ligne_vide_separe_bien_deux_paragraphes(conf):
+    html = conf._md_vers_html("Premier paragraphe.\n\nSecond paragraphe.")
+    assert html.count("<p>") == 2
+
+
+def test_un_titre_ferme_le_paragraphe_en_cours(conf):
+    html = conf._md_vers_html("Du texte.\n## Un titre\nDu texte encore.")
+    assert html.count("<p>") == 2 and "<h2>" in html
+
+
+def test_aucun_document_ne_laisse_de_markdown_brut(conf):
     """
-    Publier sans relecture est un choix légitime. Un bandeau d'avertissement
-    sur les CGU d'un artisan inquiète ses clients sans les protéger.
+    Garde sur les six, pas seulement sur celui qu'on pense à vérifier : c'est
+    dans le document oublié que le markdown brut se voit en production.
     """
-    from agent.juridique import _bandeau
+    import re as _r
 
-    c = _ctx({"publication_assumee": {"acceptee": True, "par": "M. Durand, gérant",
-                                      "date": "2026-08-24"}})
-    assert _bandeau(c) == ""
-    assert c["risque_assume"] is True
-    assert c["assume_par"] == "M. Durand, gérant"
-
-
-def test_une_acceptation_non_cochee_laisse_le_bandeau():
-    """Le bloc présent mais acceptee=false ne vaut pas décision."""
-    from agent.juridique import _bandeau
-
-    c = _ctx({"publication_assumee": {"acceptee": False, "par": "", "date": ""}})
-    assert "non relu" in _bandeau(c).lower()
+    c = conf.contexte(conf.charger())
+    for cle, (titre, fn) in conf.DOCUMENTS.items():
+        html = conf.page_html(titre, fn(c), c)
+        assert "**" not in html, f"{cle} : gras non converti"
+        assert not _r.search(r"\[[^\]]+\]\([^)]+\)", html), f"{cle} : lien non converti"
 
 
-def test_le_bandeau_disparait_de_tous_les_documents():
-    """Un document oublié afficherait le bandeau alors que la décision est prise."""
-    from agent.juridique import DOCUMENTS, contexte
+def test_tous_les_liens_internes_des_documents_existent(conf):
+    """
+    Un renvoi vers une page inexistante dans un document juridique publié.
+    Trouvé en conditions réelles : les mentions légales pointaient vers
+    /legal/conditions quand la clé est /legal/cgu.
+    """
+    import re as _r
 
-    base = {
-        "entreprise": {"raison_sociale": "X SARL", "adresse": "1 rue A",
-                       "email": "a@b.test", "representant_legal": "Y, gérant",
-                       "forme_juridique": "SARL", "immatriculation": "SIREN 1"},
-        "protection_donnees": {"email": "a@b.test", "nom": "Y"},
-        "juridiction": {"pays": "France", "autorite_controle": "CNIL",
-                        "autorite_controle_url": "https://www.cnil.fr/fr/plaintes",
-                        "droit_applicable": "droit français", "tribunal": "Paris"},
-        "publication": {"url_publique": "https://x.test"},
-        "hebergeur": {"nom": "H", "adresse": "ailleurs", "pays_donnees": "France"},
-        "traitement": {"finalites": ["a"], "base_legale": "interet_legitime",
-                       "donnees_traitees": ["b"], "opt_in": "le client écrit"},
-        "integrateur": {"raison_sociale": "I SAS", "adresse": "2 rue B", "email": "i@b.test"},
-        "mode": "agence",
-    }
-    assume = dict(base, revue_juridique={
-        "publication_assumee": {"acceptee": True, "par": "Y", "date": "2026-08-24"}})
-    sans = dict(base, revue_juridique={})
+    c = conf.contexte(conf.charger())
+    connues = set(conf.DOCUMENTS)
+    for cle, (titre, fn) in conf.DOCUMENTS.items():
+        for lien in _r.findall(r"\]\(([^)]*/legal/[^)]+)\)", fn(c)):
+            cible = lien.rsplit("/legal/", 1)[1].split("#")[0]
+            assert cible in connues, f"{cle} renvoie vers /legal/{cible}, qui n'existe pas"
 
-    for cle, (titre, fn) in DOCUMENTS.items():
-        assert "non relu" not in fn(contexte(assume)).lower(), f"{cle} affiche encore le bandeau"
-        assert "non relu" in fn(contexte(sans)).lower(), f"{cle} n'affiche pas le bandeau par défaut"
+
+# ── L'avertissement de relecture n'est plus public ───────────────────────
+
+
+def test_aucune_page_publique_ne_porte_d_avertissement(conf):
+    """
+    Un bandeau « non relu par un professionnel du droit » sur les CGU d'un
+    artisan inquiète ses clients sans les protéger, et signale une faiblesse à
+    qui la cherche. Le destinataire utile de cet avertissement est
+    l'exploitant : il est affiché dans la console, et là seulement.
+    """
+    c = conf.contexte(conf.charger())
+    assert c["revue_faite"] is False and c["risque_assume"] is False
+
+    for cle, (titre, fn) in conf.DOCUMENTS.items():
+        texte = fn(c).lower()
+        assert "non relu" not in texte, f"{cle} porte encore un avertissement"
+        assert "avis juridique" not in texte, f"{cle} porte encore un avertissement"
+
+
+def test_l_avertissement_existe_pour_la_console_tant_que_rien_n_est_tranche(conf):
+    c = conf.contexte(conf.charger())
+    a = conf._avertissement_console(c)
+    assert a and "professionnel du droit" in a["titre"]
+
+
+def test_l_avertissement_de_console_disparait_apres_decision(conf):
+    """Dans les deux sens : relu, ou assumé."""
+    base = conf.charger()
+
+    relu = conf.contexte({**base, "revue_juridique": {"effectuee": True, "par": "X"}})
+    assert conf._avertissement_console(relu) is None
+
+    assume = conf.contexte({**base, "revue_juridique": {
+        "publication_assumee": {"acceptee": True, "par": "Y", "date": "2026-08-26"}}})
+    assert conf._avertissement_console(assume) is None
+
+
+# ── Compatibilité avec les exigences de Meta ─────────────────────────────
+
+
+def test_la_politique_couvre_les_trois_exigences_de_meta(conf):
+    """
+    « Privacy Policy Expectations » de Meta : la page doit dire quelles données
+    sont collectées, dans quel but, et comment en demander la suppression.
+    """
+    c = conf.contexte(conf.charger())
+    t = conf.politique_confidentialite(c)
+
+    assert t.lstrip().startswith("# Politique de confidentialité"), \
+        "la page doit se présenter clairement comme une politique de confidentialité"
+    assert "/legal/suppression" in t, "la procédure de suppression doit être indiquée"
+    assert c["protection_donnees"]["email"] in t
+
+
+def test_les_pages_juridiques_restent_indexables(conf):
+    """
+    Les Platform Terms exigent une politique « publicly available, easily
+    accessible (including by our crawlers) ». Un noindex n'empêche pas l'accès,
+    mais rien ne justifie de rendre introuvable un document public — et Meta
+    traite l'inaccessibilité comme une violation, pas comme une préférence.
+    """
+    c = conf.contexte(conf.charger())
+    html = conf.page_html("T", conf.politique_confidentialite(c), c)
+    assert "noindex" not in html

@@ -1004,7 +1004,14 @@ async def lire_juridique():
     sache où — et la décision sur le bandeau se prenait en éditant un fichier
     YAML à la main, ce qui n'est pas une opération d'exploitant.
     """
-    from agent.juridique import DOCUMENTS, charger, etat_publication, verifier
+    from agent.juridique import (
+        DOCUMENTS,
+        contexte,
+        _avertissement_console,
+        charger,
+        etat_publication,
+        verifier,
+    )
 
     conf = charger()
     if conf is None:
@@ -1025,7 +1032,22 @@ async def lire_juridique():
             for cle, (titre, _) in DOCUMENTS.items()
         ],
         "etat": etat_publication(conf),
+        # Unique endroit où l'avertissement de relecture est affiché : ici,
+        # pour l'exploitant, et non sur les pages que ses clients consultent.
+        "avertissement": _avertissement_console(contexte(conf)),
         "problemes": verifier(conf),
+        # Les trois champs attendus par le tableau de bord Meta. Les donner ici
+        # évite d'aller les reconstruire à la main, et de se tromper de page :
+        # Meta refuse un lien mort et traite l'inaccessibilité comme une
+        # violation de ses Platform Terms.
+        "meta": {
+            "privacy_policy_url": f"{base}/legal/confidentialite",
+            "terms_of_service_url": f"{base}/legal/cgu",
+            "data_deletion_url": f"{base}/legal/suppression",
+            "reglages": f"https://developers.facebook.com/apps/{(conf.get('meta') or {}).get('app_id', '')}/settings/basic/"
+            if (conf.get("meta") or {}).get("app_id") else
+            "https://developers.facebook.com/apps/ — Paramètres → Général",
+        },
         "entreprise": (conf.get("entreprise") or {}).get("raison_sociale", ""),
         "mode": conf.get("mode", "direct"),
     }

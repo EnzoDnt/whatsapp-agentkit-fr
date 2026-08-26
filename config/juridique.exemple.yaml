@@ -39,6 +39,10 @@ entreprise:
   forme_juridique: "SARL au capital de 20 000 EUR"
   immatriculation: "RCS Lyon 000 000 000"          # SIREN/SIRET ou équivalent
   tva_intracommunautaire: "FR00000000000"          # facultatif
+  # Facultatif, mais attendu pour un artisan du bâtiment : la loi du 18 juin
+  # 2014 impose d'indiquer l'assureur et l'étendue de la couverture sur les
+  # devis et factures. L'omettre ici détonnerait avec ces documents.
+  assurance: ""     # ex. "RC décennale AXA n. 10428815 — France métropolitaine"
   adresse: "14 rue Bossuet, 69006 Lyon, France"
   telephone: "01 99 00 00 00"
   email: "contact@exemple.fr"

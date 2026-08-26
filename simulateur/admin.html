@@ -586,6 +586,15 @@ async function chargerJuridique(){
       <span class="ptt dis" style="margin-left:6px">/legal/${esc(x.cle)}</span>
     </li>`).join('');
 
+  // Unique avertissement de relecture juridique de toute l'application : il
+  // s'adresse à l'exploitant, pas aux clients, et disparaît dès qu'une
+  // décision est prise — faire relire, ou assumer.
+  const relecture=d.avertissement?`
+    <div class="avis at" style="margin:0 0 var(--e3)">
+      <strong>⚠️ ${esc(d.avertissement.titre)}</strong>
+      <p style="margin:6px 0 0">${esc(d.avertissement.texte)}</p>
+    </div>`:'';
+
   const alertes=d.problemes.length?`
     <div class="avis at" style="margin:var(--e3) 0">
       <strong>${d.problemes.length} point(s) à corriger dans config/juridique.yaml :</strong>
@@ -607,7 +616,24 @@ async function chargerJuridique(){
       Meta exige l'URL de la politique de confidentialité dans les paramètres de
       votre app${d.mode==='agence'?' ; le mode agence ajoute une annexe de sous-traitance':''}.</p>
 
-    <ul style="margin:0 0 var(--e4);padding-left:18px">${liens}</ul>
+    ${relecture}
+    <ul style="margin:0 0 var(--e3);padding-left:18px">${liens}</ul>
+
+    <details style="margin:0 0 var(--e4)">
+      <summary style="cursor:pointer">À coller dans votre app Meta</summary>
+      <p class="ptt dis" style="margin:8px 0">
+        Tableau de bord Meta → <strong>Paramètres → Général</strong>. Meta vérifie ces
+        liens : un lien mort ou inaccessible est traité comme une violation de ses
+        Platform Terms, pas comme un oubli.</p>
+      <table style="width:100%;font-size:.9em">
+        <tr><td style="padding:3px 8px 3px 0">Politique de confidentialité</td>
+            <td><code>${esc(d.meta.privacy_policy_url)}</code></td></tr>
+        <tr><td style="padding:3px 8px 3px 0">Conditions d'utilisation</td>
+            <td><code>${esc(d.meta.terms_of_service_url)}</code></td></tr>
+        <tr><td style="padding:3px 8px 3px 0">Suppression des données</td>
+            <td><code>${esc(d.meta.data_deletion_url)}</code></td></tr>
+      </table>
+    </details>
     ${alertes}
 
     <div class="avis" style="margin-bottom:var(--e3)">${etatTexte}</div>

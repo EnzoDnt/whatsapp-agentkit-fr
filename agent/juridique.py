@@ -181,28 +181,31 @@ def contexte(conf: dict) -> dict:
     }
 
 
-def _bandeau(c: dict) -> str:
+def _avertissement_console(c: dict) -> dict | None:
     """
-    Avertissement affiché tant que rien n'a été décidé.
+    L'avertissement de relecture juridique, à l'usage de la CONSOLE seule.
 
-    Trois états, et un seul affiche le bandeau :
+    Il ne figure plus sur les pages publiques. Un bandeau « non relu par un
+    professionnel du droit » sur les CGU d'un artisan inquiète ses clients sans
+    les protéger, et signale une faiblesse à qui la cherche — alors que le
+    destinataire utile de cet avertissement est l'exploitant, pas le client.
 
-    - relu par un professionnel      → pas de bandeau
-    - publication assumée sans revue → pas de bandeau, décision tracée ailleurs
-    - rien de tout cela (défaut)     → bandeau
-
-    Le bandeau n'est pas une punition : il évite qu'un document sorte sans que
-    personne ait tranché. Une fois la décision prise — dans un sens ou dans
-    l'autre — l'afficher aux clients ne protège plus personne.
+    Retourne None quand une décision a été prise, dans un sens ou dans l'autre.
     """
     if c["revue_faite"] or c["risque_assume"]:
-        return ""
-    return (
-        "> ⚠️ **Document non relu par un professionnel du droit.**\n"
-        "> Ce texte a été généré à partir d'un gabarit. Il doit être relu par un\n"
-        "> juriste ou un avocat avant d'être opposé à qui que ce soit. En l'état,\n"
-        "> il ne constitue pas un avis juridique.\n\n"
-    )
+        return None
+    return {
+        "titre": "Documents non relus par un professionnel du droit",
+        "texte": (
+            "Ces six pages sont publiées en l'état, à partir de gabarits. Elles "
+            "couvrent ce que Meta exige et ce que le RGPD impose dans le cas "
+            "courant, mais n'ont pas été écrites pour votre activité ni vos "
+            "contrats. Faites-les relire, ou assumez explicitement la "
+            "publication ci-dessous — dans les deux cas, la décision est datée "
+            "et nommée."
+        ),
+    }
+
 
 
 def _pied(c: dict) -> str:
@@ -261,7 +264,7 @@ def politique_confidentialite(c: dict) -> str:
 
     return f"""# Politique de confidentialité
 
-{_bandeau(c)}## Qui traite vos données
+## Qui traite vos données
 
 {e['raison_sociale']}, {e['forme_juridique']}, {e['immatriculation']}.
 {e['adresse']}.
@@ -321,13 +324,39 @@ sont encadrés par les clauses contractuelles types de la Commission européenne
 
 {journaux}
 
+Certaines données peuvent être conservées au-delà de cette durée lorsqu'une
+obligation légale l'impose, ou le temps nécessaire à la constatation ou à la
+défense d'un droit en justice. Elles sont alors archivées et leur accès est
+restreint à ce seul usage.
+
+## Ce qui est obligatoire, et ce qui ne l'est pas
+
+Aucune information ne vous est réclamée pour utiliser le service. Celles que
+vous transmettez — nom, adresse d'intervention, description d'un problème —
+nous sont nécessaires pour traiter votre demande : sans elles, nous ne pouvons
+pas y donner suite, mais vous restez libre de ne pas les fournir et de nous
+joindre autrement.
+
+Nous ne collectons aucune donnée à votre sujet auprès de tiers.
+
+## Traceurs
+
+Les pages de ce service ne déposent **aucun cookie** et n'utilisent aucun
+traceur : il n'y a donc rien à accepter ni à refuser.
+
 ## Vos droits
 
-Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation,
-d'opposition et de portabilité sur vos données.
+Vous disposez d'un droit d'**accès**, de **rectification**, d'**effacement**,
+de **limitation** du traitement, d'**opposition** pour motif légitime, et de
+**portabilité** de vos données. Vous pouvez également définir des **directives
+relatives au sort de vos données après votre décès** (article 85 de la loi
+Informatique et Libertés).
 
 **Pour exercer ces droits, écrivez à {pd['email']}.** Nous répondons sous un
-mois. La marche à suivre pour obtenir l'effacement est détaillée sur notre page
+mois, délai qui peut être prolongé de deux mois pour une demande complexe ;
+nous vous en informerions alors. Une preuve d'identité peut être demandée en
+cas de doute raisonnable sur l'auteur de la demande. La marche à suivre pour
+obtenir l'effacement est détaillée sur notre page
 [Suppression de vos données]({(c.get('publication') or {}).get('url_publique', '')}/legal/suppression).
 
 Vous pouvez également écrire « supprimez mes données » directement dans la
@@ -335,6 +364,13 @@ conversation WhatsApp.
 
 Si notre réponse ne vous satisfait pas, vous pouvez saisir la {j['autorite_controle']} :
 {j.get('autorite_controle_url', '')}
+
+## En cas de violation de données
+
+Si une violation de vos données survenait et présentait un risque élevé pour
+vos droits, nous vous en informerions dans les meilleurs délais, conformément
+à l'article 34 du RGPD. L'autorité de contrôle serait notifiée sous 72 heures
+comme le prévoit l'article 33.
 
 ## WhatsApp
 
@@ -350,7 +386,7 @@ def suppression_donnees(c: dict) -> str:
     pd = c["protection_donnees"]
     return f"""# Suppression de vos données
 
-{_bandeau(c)}Vous pouvez à tout moment demander la suppression des données que
+Vous pouvez à tout moment demander la suppression des données que
 {e['raison_sociale']} détient sur vous. Voici comment, et ce qui se passe ensuite.
 
 ## Trois façons de demander
@@ -401,113 +437,271 @@ saisir la {c['juridiction']['autorite_controle']} :
 
 
 def conditions_utilisation(c: dict) -> str:
+    """
+    Conditions du SERVICE DE MESSAGERIE, et de rien d'autre.
+
+    L'agent ne vend rien et ne conclut aucun contrat : les clauses de commerce
+    électronique — rétractation, prix, paiement, livraison — n'ont pas leur
+    place ici. Les importer d'un gabarit de CGV donnerait un document plus
+    long et moins solide, qui promettrait d'encadrer ce qu'il n'encadre pas.
+
+    Les conditions commerciales de l'entreprise sont un document distinct, qui
+    ne relève pas de ce kit.
+    """
     e = c["entreprise"]
     j = c["juridiction"]
+    base = (c.get("publication") or {}).get("url_publique", "").rstrip("/")
+    tel = e.get("telephone", "")
     return f"""# Conditions d'utilisation du service de messagerie
 
-{_bandeau(c)}Ces conditions encadrent l'usage de l'assistant WhatsApp mis à
-disposition par {e['raison_sociale']}. En écrivant à notre numéro, vous en
-acceptez les termes.
+En vigueur au {c.get('genere_le', '')}.
 
-## Ce que fait ce service
+## Article 1 — Objet et champ d'application
 
-Un assistant conversationnel répond à vos questions sur nos produits, nos
-horaires et nos tarifs, enregistre vos demandes, et transmet à notre équipe ce
-qui le nécessite. Il est **gratuit** et réservé à un usage personnel, dans le
-cadre de votre relation avec {e['raison_sociale']}.
+1.1. Les présentes conditions régissent l'usage de l'assistant conversationnel
+que {e['raison_sociale']} met à disposition sur WhatsApp, ci-après « le
+service ».
 
-Ce n'est pas un assistant généraliste : il ne répond que sur notre activité.
+1.2. Elles ne régissent **que** ce canal de communication. Les conditions
+applicables aux prestations de {e['raison_sociale']}, à leur prix et à leur
+exécution font l'objet de documents distincts, remis par l'entreprise.
 
-## Ce qu'il n'est pas
+1.3. En adressant un message à notre numéro, vous acceptez les présentes
+conditions. Si vous les refusez, n'utilisez pas le service : nos autres moyens
+de contact restent à votre disposition{f", notamment le {tel}" if tel else ""}.
 
-Les réponses sont fournies à titre informatif. **Elles ne constituent ni un
-devis, ni un engagement contractuel, ni un conseil professionnel.** Seul un
-document signé par {e['raison_sociale']} engage l'entreprise.
+## Article 2 — Description du service
 
-Un tarif communiqué par l'assistant est indicatif et peut évoluer. En cas de
+2.1. Le service répond aux questions portant sur l'activité de
+{e['raison_sociale']}, enregistre les demandes et transmet à l'équipe celles
+qui le nécessitent.
+
+2.2. Il est **gratuit**. Seuls les coûts de connexion facturés par votre
+opérateur ou par WhatsApp, le cas échéant, restent à votre charge.
+
+2.3. Il est réservé à un usage personnel, dans le cadre de votre relation avec
+{e['raison_sociale']}. Ce n'est pas un assistant généraliste : il ne traite
+aucun sujet étranger à notre activité.
+
+## Article 3 — Ce que le service n'est pas
+
+3.1. Les réponses sont fournies **à titre informatif**. Elles ne constituent ni
+un devis, ni une offre, ni un engagement contractuel, ni un conseil
+professionnel personnalisé.
+
+3.2. Un montant communiqué par l'assistant est **indicatif**. Seul un document
+émis et signé par {e['raison_sociale']} engage l'entreprise. En cas de
 divergence entre une réponse de l'assistant et un document commercial, **le
 document prévaut**.
 
-L'assistant n'est pas un service d'urgence. En cas d'urgence, appelez
-{e.get('telephone', 'notre standard')} ou les services compétents.
+3.3. **Le service n'est pas un dispositif d'urgence.** Il ne garantit aucun
+délai de prise en charge. En cas d'urgence, appelez{f" le {tel} ou" if tel else ""}
+les services de secours compétents.
 
-## Ce que nous attendons de vous
+## Article 4 — Accès et prérequis
 
-- N'envoyez pas de données sensibles : santé, opinions, coordonnées bancaires.
-  Nous n'en demandons jamais par messagerie.
-- N'utilisez pas le service pour des contenus illicites, injurieux ou
-  harcelants.
-- N'essayez pas de détourner l'assistant de son objet, ni d'en perturber le
-  fonctionnement.
+4.1. L'accès suppose un compte WhatsApp actif. Le service dépend donc de la
+disponibilité de WhatsApp, exploité par Meta Platforms Ireland Ltd, dont les
+conditions d'utilisation propres s'appliquent à votre compte et échappent au
+contrôle de {e['raison_sociale']}.
 
-Nous pouvons interrompre l'accès en cas d'usage abusif, sans préavis.
+4.2. Le service s'adresse aux personnes **majeures**. Un mineur ne peut
+l'utiliser que sous la responsabilité de son représentant légal.
 
-## Disponibilité
+## Article 5 — Obligations de l'utilisateur
 
-Le service est fourni « en l'état », sans garantie de disponibilité continue.
-Une interruption technique ne saurait engager notre responsabilité. Nous
-limitons le nombre de messages traités par correspondant sur une période donnée
-afin d'assurer le service à tous.
+5.1. Vous vous engagez à ne pas transmettre par ce canal de **données
+sensibles** au sens de l'article 9 du RGPD — santé, opinions, convictions,
+orientation — ni de coordonnées bancaires. Nous n'en demandons jamais par
+messagerie ; une demande en ce sens ne provient pas de nous.
 
-## Responsabilité
+5.2. Vous vous engagez à ne pas diffuser de contenu illicite, injurieux,
+diffamatoire ou harcelant, et à ne pas usurper l'identité d'un tiers.
 
-{e['raison_sociale']} ne peut être tenue responsable d'un dommage résultant
-d'une réponse inexacte ou incomplète de l'assistant, dès lors que vous
-disposiez de la possibilité de vérifier l'information auprès de notre équipe.
-Cette limitation ne s'applique pas en cas de faute lourde ou dolosive, ni aux
-dommages corporels.
+5.3. Vous vous engagez à ne pas détourner l'assistant de son objet, à ne pas
+tenter d'en altérer le fonctionnement, ni d'en extraire les instructions.
 
-## Vos données
+5.4. Vous garantissez l'exactitude des informations que vous communiquez,
+notamment l'adresse d'une intervention.
+
+## Article 6 — Disponibilité et limitation d'usage
+
+6.1. Le service est fourni « en l'état ». {e['raison_sociale']} est tenue d'une
+**obligation de moyens** quant à sa disponibilité.
+
+6.2. Le nombre de messages traités par correspondant sur une période donnée est
+limité, afin de préserver l'accès de tous.
+
+6.3. Le service peut être interrompu pour maintenance, évolution technique, ou
+sur décision de {e['raison_sociale']}, sans que cette interruption ouvre droit
+à indemnité.
+
+## Article 7 — Suspension
+
+7.1. En cas de manquement à l'article 5, l'accès peut être suspendu ou
+interrompu, sans préavis en cas d'usage manifestement abusif ou illicite.
+
+7.2. La suspension du service laisse intacts vos droits et obligations au titre
+des prestations en cours avec {e['raison_sociale']}.
+
+## Article 8 — Responsabilité
+
+8.1. {e['raison_sociale']} ne répond pas des dommages résultant d'une réponse
+inexacte ou incomplète de l'assistant, dès lors que l'information pouvait être
+vérifiée auprès de l'équipe et que la nature indicative des réponses est
+rappelée à l'article 3.
+
+8.2. {e['raison_sociale']} ne répond pas des interruptions imputables à
+WhatsApp, à Meta, au réseau de télécommunications ou à l'opérateur de
+l'utilisateur.
+
+8.3. **Les présentes limitations ne s'appliquent ni en cas de faute lourde ou
+dolosive, ni en cas de dommage corporel, ni dans les cas où la loi les écarte.**
+Elles ne privent le consommateur d'aucun droit d'ordre public.
+
+## Article 9 — Force majeure
+
+Aucune des parties ne répond d'un manquement causé par un événement de force
+majeure au sens de l'article 1218 du Code civil, notamment une panne
+généralisée des réseaux, une interruption durable des services de Meta, ou une
+décision d'une autorité publique. L'obligation est suspendue pendant la durée
+de l'événement.
+
+## Article 10 — Preuve
+
+10.1. Les échanges intervenus par ce canal sont conservés dans les conditions
+décrites par notre [politique de confidentialité]({base}/legal/confidentialite).
+
+10.2. Les parties conviennent que ces enregistrements, ainsi que les journaux
+techniques du service, constituent un **mode de preuve recevable** de la teneur
+et de la date des échanges, sauf preuve contraire rapportée par tout moyen.
+
+## Article 11 — Propriété intellectuelle
+
+Les contenus diffusés par l'assistant — textes, documents, tarifs — demeurent
+la propriété de {e['raison_sociale']}. Ils vous sont communiqués pour votre
+information personnelle et ne peuvent être reproduits ou diffusés publiquement
+sans autorisation écrite.
+
+## Article 12 — Données personnelles
 
 Le traitement de vos données est décrit dans notre
-[politique de confidentialité]({(c.get('publication') or {}).get('url_publique','')}/legal/confidentialite).
+[politique de confidentialité]({base}/legal/confidentialite). La procédure
+d'effacement figure sur la page
+[Suppression de vos données]({base}/legal/suppression). L'usage de
+l'intelligence artificielle est détaillé sur la page
+[Usage de l'intelligence artificielle]({base}/legal/ia).
 
-## Évolution et droit applicable
+## Article 13 — Durée et modification
 
-Ces conditions peuvent être modifiées ; la version applicable est celle publiée
-à cette adresse au moment de votre message. Elles sont soumises au
-{j['droit_applicable']}. À défaut de résolution amiable, compétence est
-attribuée aux {j['tribunal']}.
+13.1. Les présentes s'appliquent tant que vous utilisez le service. Vous pouvez
+cesser de l'utiliser à tout moment, sans formalité.
+
+13.2. Elles peuvent être modifiées. La version applicable est celle publiée à
+cette adresse à la date de votre message ; sa date d'entrée en vigueur figure
+en tête du document. Une modification substantielle est signalée dans la
+conversation.
+
+## Article 14 — Réclamation, droit applicable et juridiction
+
+14.1. Toute réclamation relative au service peut être adressée à
+{e['email']}. Nous accusons réception sous 5 jours ouvrés et répondons dans un
+délai raisonnable.
+
+14.2. Si l'une des présentes clauses était déclarée nulle ou inapplicable, les
+autres conserveraient leur plein effet.
+
+14.3. Les présentes sont soumises au {j['droit_applicable']}. À défaut de
+résolution amiable, compétence est attribuée aux {j['tribunal']}, sous réserve
+des règles impératives protégeant le consommateur.
 {_pied(c)}"""
+
 
 
 def mentions_legales(c: dict) -> str:
+    """
+    Identité de l'éditeur, telle qu'exigée par la LCEN.
+
+    Les champs facultatifs — TVA, assurance, RM — n'apparaissent que s'ils sont
+    renseignés : une ligne « non précisé » dans des mentions légales est pire
+    qu'une absence, elle signale un document rempli sans être relu.
+    """
     e = c["entreprise"]
-    h = c["hebergeur"]
-    tva = f"\nNuméro de TVA intracommunautaire : {e['tva_intracommunautaire']}" if e.get("tva_intracommunautaire") else ""
-    site = f"\nSite : {e['site_web']}" if e.get("site_web") else ""
+    h = c.get("hebergeur") or {}
+    base = (c.get("publication") or {}).get("url_publique", "").rstrip("/")
+
+    lignes = [e["raison_sociale"]]
+    for cle in ("forme_juridique", "immatriculation", "adresse"):
+        if e.get(cle):
+            lignes.append(str(e[cle]))
+    if e.get("telephone"):
+        lignes.append(f"Téléphone : {e['telephone']}")
+    lignes.append(f"Courriel : {e['email']}")
+    if e.get("tva_intracommunautaire"):
+        lignes.append(f"TVA intracommunautaire : {e['tva_intracommunautaire']}")
+    identite = "  \n".join(lignes)
+
+    # L'assurance figure dans la configuration depuis l'origine sans avoir
+    # jamais été rendue. Pour un artisan du bâtiment, elle est attendue :
+    # la loi du 18 juin 2014 impose d'indiquer assureur et couverture sur les
+    # devis et factures, et l'omettre ici détonne avec ces documents.
+    assurance = ""
+    if e.get("assurance"):
+        assurance = f"""
+
+## Assurance professionnelle
+
+{e['assurance']}"""
+
+    heb = [h.get("nom", "non précisé")]
+    if h.get("adresse"):
+        heb.append(str(h["adresse"]))
+    if h.get("telephone"):
+        heb.append(str(h["telephone"]))
+    hebergeur = "  \n".join(heb)
+
     return f"""# Mentions légales
 
-{_bandeau(c)}## Éditeur
+## Éditeur du service
 
-{e['raison_sociale']}
-{e['forme_juridique']}
-{e['immatriculation']}{tva}
-{e['adresse']}
-Téléphone : {e.get('telephone', '')}
-Courriel : {e.get('email', '')}{site}
+{identite}
 
-Directeur de la publication : {e.get('representant_legal', '')}
+Directeur de la publication : {e['representant_legal']}{assurance}
 
 ## Hébergeur
 
-{h['nom']}
-{h['adresse']}
-{h.get('telephone', '')}
+{hebergeur}
 
-Les données de l'agent sont hébergées en **{h.get('pays_donnees', 'non précisé')}**.
+Les données du service sont hébergées en **{h.get('pays_donnees', 'non précisé')}**.
+
+## Nature du service
+
+Ce service est un canal de communication mis à disposition par
+{e['raison_sociale']}. Il ne constitue pas une plateforme de vente en ligne :
+aucune commande n'y est conclue et aucun paiement n'y est traité. Les
+conditions d'usage figurent sur la page
+[Conditions d'utilisation]({base}/legal/cgu).
 
 ## Propriété intellectuelle
 
-Les contenus diffusés par l'assistant — textes, tarifs, documents — sont la
-propriété de {e['raison_sociale']}. Toute reproduction sans autorisation est
-interdite.
+Les contenus diffusés par l'assistant — textes, documents, tarifs — demeurent
+la propriété de {e['raison_sociale']}, de même que la marque et les signes
+distinctifs qui y figurent. Toute reproduction ou diffusion publique sans
+autorisation écrite est interdite.
 
-## Signalement
+## Données personnelles
+
+Le traitement des données est décrit sur la page
+[Politique de confidentialité]({base}/legal/confidentialite).
+Contact : {(c.get('protection_donnees') or {}).get('email', e['email'])}.
+
+## Signalement d'un contenu illicite
 
 Pour signaler un contenu illicite diffusé par ce service, écrivez à
-{c['protection_donnees']['email']} en précisant la date et le contenu concerné.
+{e['email']} en précisant la date, le contenu concerné et le motif du
+signalement. Nous accusons réception sous 5 jours ouvrés.
 {_pied(c)}"""
+
 
 
 def transparence_ia(c: dict) -> str:
@@ -520,7 +714,7 @@ def transparence_ia(c: dict) -> str:
     mention = modes.get(c["mode_transparence"], c["mode_transparence"])
     return f"""# Information sur l'usage de l'intelligence artificielle
 
-{_bandeau(c)}## Vous parlez à une machine, et vous en êtes informé
+## Vous parlez à une machine, et vous en êtes informé
 
 Les réponses de l'assistant WhatsApp de {e['raison_sociale']} sont rédigées par
 un système d'intelligence artificielle. Vous en êtes averti par {mention}.
@@ -562,7 +756,7 @@ def annexe_sous_traitance(c: dict) -> str:
     e = c["entreprise"]
     return f"""# Annexe — traitement des données en sous-traitance
 
-{_bandeau(c)}Cette annexe précise la répartition des rôles entre
+Cette annexe précise la répartition des rôles entre
 {e['raison_sociale']} et {i.get('raison_sociale', "l'intégrateur")} au titre de
 l'article 28 du RGPD. **Elle ne remplace pas un contrat de sous-traitance signé**
 : elle en documente le contenu attendu, à faire valider par vos conseils
@@ -731,18 +925,26 @@ def _md_vers_html(md: str) -> str:
                 vider()
             tampon_liste.append(nue[2:])
             continue
-        vider_paragraphe()
-        vider()
+        # Les lignes ordinaires s'ACCUMULENT : un paragraphe markdown court sur
+        # plusieurs lignes. Vider avant chaque ligne produisait un <p> par ligne
+        # source, et coupait tout ce qui s'étend au-delà — un **gras** ou un
+        # [lien](…) à cheval sur un retour restait affiché en markdown brut.
         if not nue:
+            vider_paragraphe()
+            vider()
             continue
-        if nue.startswith("## "):
-            sortie.append(f"<h2>{_en_ligne(nue[3:])}</h2>")
-        elif nue.startswith("# "):
-            sortie.append(f"<h1>{_en_ligne(nue[2:])}</h1>")
-        elif nue == "---":
-            sortie.append("<hr>")
-        else:
-            paragraphe.append(nue)
+        if nue.startswith(("## ", "# ")) or nue == "---":
+            vider_paragraphe()
+            vider()
+            if nue.startswith("## "):
+                sortie.append(f"<h2>{_en_ligne(nue[3:])}</h2>")
+            elif nue.startswith("# "):
+                sortie.append(f"<h1>{_en_ligne(nue[2:])}</h1>")
+            else:
+                sortie.append("<hr>")
+            continue
+        vider()
+        paragraphe.append(nue)
 
     vider_paragraphe()
     vider()
@@ -757,7 +959,11 @@ def page_html(titre: str, markdown: str, c: dict) -> str:
     return (
         "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">"
         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-        "<meta name=\"robots\" content=\"noindex\">"
+        # Pas de noindex : ce sont des documents PUBLICS, et les Platform Terms
+        # de Meta exigent une politique « publicly available, easily accessible
+        # (including by our crawlers), and non-geoblocked ». Un lien inaccessible
+        # est traité comme une violation, pas comme une préférence.
+        ""
         f"<title>{_html.escape(titre)}</title><style>{_STYLE}</style></head>"
         f"<body><main><nav>{liens}</nav>{_md_vers_html(markdown)}</main></body></html>"
     )
