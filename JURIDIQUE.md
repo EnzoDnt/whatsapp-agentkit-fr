@@ -31,6 +31,16 @@ conservation, fournisseur d'IA, mode de transparence, journalisation du contenu,
 services de traitement des fichiers. Ces valeurs ne sont jamais redemandées, et
 les documents suivent la configuration.
 
+> **Ce fichier est la référence de l'assistant d'installation, pas votre marche
+> à suivre.** C'est lui qui mène l'entretien juridique, remplit
+> `config/juridique.yaml`, vérifie son travail et pose les URL dans Meta — voir
+> `AGENTS.md`, étape 2 ter. Vous n'intervenez que sur deux points : les quatre
+> informations que nul ne peut deviner (raison sociale, immatriculation,
+> représentant légal, e-mail RGPD), et **la relecture par un juriste**.
+>
+> Ce qui suit détaille le contenu, les écarts entre pays et les arbitrages —
+> utile pour comprendre ce que l'assistant produit, ou pour reprendre la main.
+
 ## 2. Mise en place
 
 ```bash

@@ -58,6 +58,65 @@ SOUS_TRAITANTS = {
 }
 
 
+# Autorités de contrôle, par pays. Une politique de confidentialité doit
+# indiquer où réclamer (art. 13 RGPD) : une URL inventée est pire qu'absente,
+# elle envoie la personne dans le vide au moment où elle exerce un droit.
+# L'assistant d'installation lit cette table au lieu de deviner.
+AUTORITES = {
+    "FR": ("CNIL", "https://www.cnil.fr/fr/plaintes", "RGPD + loi Informatique et Libertés"),
+    "BE": ("Autorité de protection des données (APD)",
+           "https://www.autoriteprotectiondonnees.be", "RGPD"),
+    "LU": ("Commission nationale pour la protection des données (CNPD)",
+           "https://cnpd.public.lu", "RGPD"),
+    "DE": ("l'autorité de protection des données de votre Land",
+           "https://www.bfdi.bund.de/DE/Service/Anschriften/anschriften_node.html",
+           "RGPD + BDSG — Impressum plus exigeant qu'en France"),
+    "ES": ("Agencia Española de Protección de Datos (AEPD)",
+           "https://www.aepd.es", "RGPD + LSSI-CE"),
+    "IT": ("Garante per la protezione dei dati personali",
+           "https://www.garanteprivacy.it", "RGPD"),
+    "GB": ("Information Commissioner's Office (ICO)",
+           "https://ico.org.uk/make-a-complaint/", "UK GDPR + Data Protection Act 2018"),
+    "CH": ("Préposé fédéral à la protection des données et à la transparence (PFPDT)",
+           "https://www.edoeb.admin.ch", "nLPD — et RGPD en plus si clients dans l'UE"),
+    "CA-QC": ("Commission d'accès à l'information du Québec (CAI)",
+              "https://www.cai.gouv.qc.ca", "Loi 25 — plus exigeante que le RGPD sur le consentement"),
+    "CA": ("Commissariat à la protection de la vie privée du Canada",
+           "https://www.priv.gc.ca", "LPRPDE / PIPEDA"),
+    "BR": ("Autoridade Nacional de Proteção de Dados (ANPD)",
+           "https://www.gov.br/anpd", "LGPD"),
+    "US": ("California Privacy Protection Agency (si vos clients sont en Californie)",
+           "https://cppa.ca.gov", "CCPA/CPRA + lois d'État — pas de loi fédérale"),
+}
+
+# Pays où les gabarits du kit ne suffisent pas : ils demandent une refonte,
+# pas un ajustement. L'assistant doit le dire AVANT de générer, pas après.
+ZONES_A_REFONDRE = {
+    "CA-QC": "La Loi 25 impose un responsable de la protection des renseignements "
+             "personnels, une évaluation des facteurs relatifs à la vie privée et un "
+             "consentement exprès pour tout usage secondaire. Les gabarits sont à refondre.",
+    "US": "Il n'existe pas de loi fédérale : la CCPA/CPRA et une vingtaine "
+          "d'équivalents d'État s'appliquent selon des seuils différents. Les mentions "
+          "« Do Not Sell or Share » sont absentes des gabarits, et le TCPA sanctionne "
+          "lourdement les messages non sollicités.",
+}
+
+# Hébergeurs courants. La LCEN française impose de nommer l'hébergeur dans les
+# mentions légales, avec une adresse joignable.
+HEBERGEURS = {
+    "hetzner": ("Hetzner Online GmbH",
+                "Industriestr. 25, 91710 Gunzenhausen, Allemagne", "Allemagne"),
+    "scaleway": ("Scaleway SAS",
+                 "8 rue de la Ville l'Évêque, 75008 Paris, France", "France"),
+    "ovh": ("OVH SAS", "2 rue Kellermann, 59100 Roubaix, France", "France"),
+    "infomaniak": ("Infomaniak Network SA",
+                   "Rue Eugène-Marziano 25, 1227 Genève, Suisse", "Suisse"),
+    "railway": ("Railway Corp.", "États-Unis", "États-Unis"),
+    "render": ("Render Services, Inc.", "États-Unis", "États-Unis"),
+    "fly": ("Fly.io, Inc.", "États-Unis", "États-Unis"),
+}
+
+
 class ErreurJuridique(RuntimeError):
     """Configuration juridique absente ou inexploitable."""
 
@@ -681,3 +740,148 @@ def page_html(titre: str, markdown: str, c: dict) -> str:
         f"<title>{_html.escape(titre)}</title><style>{_STYLE}</style></head>"
         f"<body><main><nav>{liens}</nav>{_md_vers_html(markdown)}</main></body></html>"
     )
+
+
+# ── Vérification ─────────────────────────────────────────────────────────
+
+# Champs sans lesquels un document est faux plutôt qu'incomplet : une mention
+# légale sans raison sociale ni adresse ne remplit aucune obligation.
+OBLIGATOIRES = (
+    ("entreprise", "raison_sociale"),
+    ("entreprise", "adresse"),
+    ("entreprise", "email"),
+    ("entreprise", "representant_legal"),
+    ("protection_donnees", "email"),
+    ("juridiction", "pays"),
+    ("juridiction", "autorite_controle"),
+    ("publication", "url_publique"),
+)
+
+# Valeurs du fichier d'exemple : recopiées telles quelles, elles produisent des
+# documents d'apparence sérieuse au nom d'une entreprise qui n'existe pas.
+TEMOINS_EXEMPLE = (
+    "Maison Lorette", "exemple.fr", "000 000 000", "01 99 00 00 00",
+    "Camille Lorette", "14 rue Bossuet",
+)
+
+
+def verifier(conf: dict) -> list[str]:
+    """
+    Retourne la liste des problèmes, vide si tout va bien.
+
+    Pensé pour l'assistant d'installation : il génère, puis il vérifie, plutôt
+    que d'annoncer que c'est fait. Un document juridique incomplet ne lève
+    aucune erreur à l'exécution — il se découvre en contrôle.
+    """
+    problemes: list[str] = []
+
+    for section, champ in OBLIGATOIRES:
+        valeur = str((conf.get(section) or {}).get(champ, "") or "").strip()
+        if not valeur:
+            problemes.append(f"{section}.{champ} est vide (obligatoire)")
+
+    plat = yaml.safe_dump(conf, allow_unicode=True)
+    for temoin in TEMOINS_EXEMPLE:
+        if temoin in plat:
+            problemes.append(
+                f"« {temoin} » vient du fichier d'exemple : remplacez-le par la "
+                "valeur réelle de l'entreprise"
+            )
+
+    pays = str((conf.get("juridiction") or {}).get("pays_code", "") or "").strip().upper()
+    if pays and pays not in AUTORITES:
+        problemes.append(
+            f"juridiction.pays_code « {pays} » inconnu — valeurs connues : "
+            + ", ".join(sorted(AUTORITES))
+        )
+    elif pays:
+        attendue = AUTORITES[pays][1]
+        declaree = str((conf.get("juridiction") or {}).get("autorite_controle_url", "") or "")
+        if declaree and declaree.rstrip("/") != attendue.rstrip("/"):
+            problemes.append(
+                f"juridiction.autorite_controle_url ne correspond pas à {pays} "
+                f"(attendu : {attendue})"
+            )
+
+    heb = conf.get("hebergeur") or {}
+    if heb.get("nom") and not str(heb.get("adresse", "") or "").strip():
+        problemes.append(
+            "hebergeur.adresse est vide : la LCEN impose une adresse joignable "
+            "pour l'hébergeur dans les mentions légales"
+        )
+
+    url = str((conf.get("publication") or {}).get("url_publique", "") or "")
+    if url and not url.startswith("https://"):
+        problemes.append("publication.url_publique doit être en HTTPS")
+
+    # Cohérence avec la configuration réellement en vigueur.
+    if (conf.get("traitement") or {}).get("conservation_jours") is not None:
+        problemes.append(
+            "traitement.conservation_jours ne doit pas être déclaré ici : il est "
+            "lu dans RETENTION_JOURS, sinon les deux se contredisent au premier "
+            "changement de configuration"
+        )
+
+    return problemes
+
+
+def _cli() -> int:
+    import argparse
+    import json
+
+    p = argparse.ArgumentParser(
+        prog="python -m agent.juridique",
+        description="Vérifie config/juridique.yaml et affiche ce que le kit sait déjà.",
+    )
+    p.add_argument("--verifier", action="store_true", help="contrôle le fichier")
+    p.add_argument("--connu", action="store_true",
+                   help="affiche ce que le kit déduit seul (JSON), pour l'assistant")
+    p.add_argument("--pays", help="code pays : rappelle l'autorité de contrôle")
+    a = p.parse_args()
+
+    if a.pays:
+        code = a.pays.strip().upper()
+        if code not in AUTORITES:
+            print(f"Pays inconnu. Connus : {', '.join(sorted(AUTORITES))}")
+            return 2
+        nom, url, loi = AUTORITES[code]
+        print(f"autorite_controle:     {nom}")
+        print(f"autorite_controle_url: {url}")
+        print(f"cadre applicable:      {loi}")
+        if code in ZONES_A_REFONDRE:
+            print(f"\n⚠️  {ZONES_A_REFONDRE[code]}")
+        return 0
+
+    conf = charger()
+    if conf is None:
+        print("config/juridique.yaml absent. Copiez config/juridique.exemple.yaml.")
+        return 1
+
+    if a.connu:
+        c = contexte(conf)
+        print(json.dumps({
+            "retention_jours": c["retention_jours"],
+            "fournisseur_ia": c["fournisseur_ia"],
+            "mode_transparence": c["mode_transparence"],
+            "journalise_contenu": c["journalise_contenu"],
+            "sous_traitants": [list(t) for t in c["sous_traitants"]],
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    problemes = verifier(conf)
+    if not problemes:
+        print("✅ config/juridique.yaml est complet et cohérent.")
+        if not (conf.get("revue_juridique") or {}).get("effectuee"):
+            print("\n⚠️  revue_juridique.effectuee vaut false : les pages publiées")
+            print("    portent un bandeau d'avertissement. C'est voulu tant qu'un")
+            print("    juriste n'a pas relu.")
+        return 0
+
+    print(f"❌ {len(problemes)} problème(s) :\n")
+    for x in problemes:
+        print(f"  - {x}")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())

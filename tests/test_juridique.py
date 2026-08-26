@@ -188,3 +188,104 @@ def test_la_configuration_juridique_est_exclue_du_depot():
     """
     lignes = (RACINE / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "config/juridique.yaml" in lignes
+
+
+# ── Vérification assistée ────────────────────────────────────────────────
+
+
+def _conf_valide():
+    return {
+        "mode": "direct",
+        "entreprise": {
+            "raison_sociale": "Plomberie Durand SARL",
+            "adresse": "3 rue des Lilas, 93100 Montreuil",
+            "email": "contact@plomberie-durand.test",
+            "representant_legal": "Alex Durand, gérant",
+        },
+        "protection_donnees": {"email": "donnees@plomberie-durand.test"},
+        "juridiction": {
+            "pays": "France",
+            "pays_code": "FR",
+            "autorite_controle": "CNIL",
+            "autorite_controle_url": "https://www.cnil.fr/fr/plaintes",
+        },
+        "publication": {"url_publique": "https://agent.plomberie-durand.test"},
+        "hebergeur": {"nom": "Hetzner Online GmbH", "adresse": "Gunzenhausen, Allemagne"},
+    }
+
+
+def test_une_configuration_complete_passe():
+    from agent.juridique import verifier
+
+    assert verifier(_conf_valide()) == []
+
+
+def test_les_valeurs_de_l_exemple_sont_refusees():
+    """
+    Le piège principal : recopier l'exemple sans le remplir produit des
+    documents d'apparence officielle au nom d'une entreprise qui n'existe pas.
+    """
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["entreprise"]["raison_sociale"] = "Maison Lorette"
+    problemes = verifier(c)
+    assert any("Maison Lorette" in p for p in problemes)
+
+
+def test_un_champ_obligatoire_vide_est_signale():
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["entreprise"]["representant_legal"] = ""
+    assert any("representant_legal" in p for p in verifier(c))
+
+
+def test_une_autorite_incoherente_avec_le_pays_est_signalee():
+    """
+    Une URL d'autorité fausse envoie la personne dans le vide au moment où elle
+    exerce un droit — c'est pire que de ne rien indiquer.
+    """
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["juridiction"]["autorite_controle_url"] = "https://ico.org.uk/make-a-complaint/"
+    assert any("autorite_controle_url" in p for p in verifier(c))
+
+
+def test_toutes_les_autorites_ont_une_url_https():
+    from agent.juridique import AUTORITES
+
+    for code, (nom, url, loi) in AUTORITES.items():
+        assert url.startswith("https://"), f"{code} : URL non HTTPS"
+        assert nom and loi, f"{code} : entrée incomplète"
+
+
+def test_les_zones_a_refondre_sont_documentees():
+    """Un pays signalé comme « à refondre » doit expliquer pourquoi."""
+    from agent.juridique import AUTORITES, ZONES_A_REFONDRE
+
+    for code, motif in ZONES_A_REFONDRE.items():
+        assert code in AUTORITES, f"{code} absent de AUTORITES"
+        assert len(motif) > 80, f"{code} : motif trop vague pour être utile"
+
+
+def test_l_hebergeur_sans_adresse_est_signale():
+    """La LCEN impose une adresse joignable pour l'hébergeur."""
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["hebergeur"]["adresse"] = ""
+    assert any("hebergeur.adresse" in p for p in verifier(c))
+
+
+def test_une_duree_de_conservation_dupliquee_est_refusee():
+    """
+    Déclarée ici ET dans RETENTION_JOURS, elle se contredit au premier
+    changement de configuration.
+    """
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["traitement"] = {"conservation_jours": 30}
+    assert any("conservation_jours" in p for p in verifier(c))

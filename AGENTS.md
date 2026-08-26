@@ -80,6 +80,8 @@ gauche.
 | Vérifier qu'aucun secret n'est publié | `git ls-files` |
 | Construire et tester l'image Docker | `docker build` |
 | Installer et lancer un tunnel HTTPS public | `brew install cloudflared` puis `cloudflared tunnel --url` |
+| **Rédiger les documents juridiques** (confidentialité, CGU, mentions, IA) | `config/juridique.yaml` puis `python -m agent.juridique --verifier` |
+| Trouver l'autorité de contrôle d'un pays | `python -m agent.juridique --pays <code>` |
 | Générer les secrets (verify token, sel de hachage) | `openssl rand -hex 24` |
 | Écrire le `.env` | édition de fichier |
 | Lancer le simulateur et vérifier que l'agent répond | `make simulateur` |
@@ -96,6 +98,7 @@ gauche.
 | Vérification d'entreprise (production seulement) | Contrôle d'identité Meta, 2 à 4 jours |
 | Créer un compte GitHub, Railway, Coolify ou un VPS | Aucune API de création de compte |
 | Saisir les variables d'environnement chez l'hébergeur | Console web, avec ses identifiants |
+| Faire relire les documents juridiques par un juriste | Ce n'est pas un avis juridique, et personne ici ne connaît son activité |
 
 **Si le MCP Meta n'est pas connecté**, ne bloque pas : avec le token d'accès tu
 peux faire la même chose en `curl` sur la Graph API (`POST /{app_id}/subscriptions`).
@@ -258,6 +261,90 @@ logo: "logo.png"
 
 **Vérification** : recharge `/admin` — le logo et le nom apparaissent en haut de
 la barre latérale.
+
+### Étape 2 ter — Les documents juridiques
+
+**C'est toi qui les produis.** Ne renvoie pas la personne vers un générateur en
+ligne ni vers `JURIDIQUE.md` : ce fichier est ta référence, pas ses devoirs.
+
+Meta **exige** une URL de politique de confidentialité dans les paramètres de
+l'app — sans elle, pas d'App Review ni de passage en Live. Le RGPD impose les
+mêmes informations, et l'AI Act la mention d'IA. L'agent sert ces pages
+lui-même sur `/legal` : rien à héberger ailleurs.
+
+**Ce que tu remplis seul — ne le demande jamais**
+
+| Champ | D'où il vient |
+|---|---|
+| `entreprise.*` (nom, adresse, téléphone, email) | déjà collecté à l'étape 2, dans `config/entreprise.yaml` |
+| `hebergeur.*` | tu viens de le choisir — table `HEBERGEURS` dans `agent/juridique.py` |
+| `juridiction.autorite_controle` et son URL | `python -m agent.juridique --pays FR` |
+| `publication.url_publique` | l'adresse que tu viens de déployer |
+| `publication.derniere_revision` | la date du jour |
+| Conservation, fournisseur d'IA, transparence, sous-traitants | lus dans le `.env` — **ne les recopie pas**, ils seraient contredits au premier changement |
+
+`python -m agent.juridique --connu` t'affiche ce dernier bloc en JSON.
+
+**Ce que tu demandes — quatre questions, pas vingt-cinq**
+
+Une à la fois, comme à l'étape 2. Ce sont les seules choses qu'aucune API ne
+donne et qu'aucun fichier ne contient :
+
+1. La **raison sociale exacte** et la forme juridique (« SARL au capital de… »)
+2. Le **numéro d'immatriculation** (SIREN/SIRET, RCS, ou l'équivalent local)
+3. Le **représentant légal** — nom et qualité
+4. L'**adresse e-mail** qui recevra les demandes RGPD (souvent la même que le
+   contact général ; propose-la et laisse confirmer)
+
+Si la personne a un **DPO désigné**, demande-le en cinquième. La plupart des
+PME n'en ont pas, et ce n'est pas obligatoire : ne laisse pas croire l'inverse.
+
+**Le mode**
+
+`direct` si l'entreprise déploie son propre agent. `agence` si tu installes
+pour le compte d'un client : le client reste responsable de traitement,
+l'intégrateur devient sous-traitant, et une annexe de sous-traitance (art. 28
+RGPD) est générée en plus. Déduis-le du contexte, confirme en une phrase.
+
+**Tu écris, puis tu vérifies**
+
+```bash
+python -m agent.juridique --verifier
+```
+
+Il refuse un fichier incomplet, et surtout il détecte les valeurs recopiées de
+l'exemple — « Maison Lorette » dans les mentions légales d'un plombier produit
+un document d'apparence officielle au nom d'une entreprise qui n'existe pas.
+Ne dis pas que c'est fait tant que cette commande n'affiche pas ✅.
+
+**Les URL dans Meta** — une fois l'adresse publique stable (étape 4) :
+
+```
+Politique de confidentialité : https://<adresse>/legal/confidentialite
+Conditions d'utilisation     : https://<adresse>/legal/conditions
+Suppression des données      : https://<adresse>/legal/suppression
+```
+
+Tente d'abord l'API — `POST /{app_id}` accepte `privacy_policy_url` et
+`terms_of_service_url` avec un jeton d'application. Si elle refuse, c'est un
+bloc « J'ai besoin de toi » : ces trois champs se posent dans **Paramètres →
+Général** du tableau de bord Meta.
+
+**Ce que tu dois dire, et ne pas enjoliver**
+
+> Ces documents couvrent ce que Meta exige et ce que le RGPD impose dans le cas
+> courant. **Ce ne sont pas un avis juridique.** Comptez une heure de relecture
+> par un juriste — un document généré et jamais relu vous expose plus qu'il ne
+> vous protège, parce qu'il prouve que vous connaissiez l'obligation.
+>
+> Tant que la relecture n'a pas eu lieu, les pages portent un bandeau
+> d'avertissement. C'est délibéré, et c'est à vous de le lever.
+
+**Avant de générer, vérifie la zone.** `python -m agent.juridique --pays <code>`
+signale les pays où les gabarits sont à **refondre** et non à ajuster —
+Québec (Loi 25) et États-Unis (CCPA, TCPA) notamment. Dis-le **avant**, pas
+après. Et rappelle la règle qui prime : c'est la localisation des **clients**
+qui décide du droit applicable, pas celle de l'entreprise.
 
 ### Étape 3 bis — Back-office (optionnel, recommandé)
 
