@@ -412,15 +412,50 @@ Tente d'abord l'API — `POST /{app_id}` accepte `privacy_policy_url` et
 bloc « J'ai besoin de toi » : ces trois champs se posent dans **Paramètres →
 Général** du tableau de bord Meta.
 
-**Ce que tu dois dire, et ne pas enjoliver**
+**Q6 — La relecture juridique, et le bandeau**
 
-> Ces documents couvrent ce que Meta exige et ce que le RGPD impose dans le cas
-> courant. **Ce ne sont pas un avis juridique.** Comptez une heure de relecture
-> par un juriste — un document généré et jamais relu vous expose plus qu'il ne
-> vous protège, parce qu'il prouve que vous connaissiez l'obligation.
+Ne présente pas la relecture comme acquise : elle coûte, et beaucoup de petites
+structures décident de s'en passer. Ton rôle est qu'elles décident, pas
+qu'elles subissent.
+
+> **Ces documents doivent-ils être relus par un juriste avant publication ?**
 >
-> Tant que la relecture n'a pas eu lieu, les pages portent un bandeau
-> d'avertissement. C'est délibéré, et c'est à vous de le lever.
+> Ce sont des gabarits sérieux : ils couvrent ce que Meta exige et ce que le
+> RGPD impose dans le cas courant. Mais ils n'ont pas été écrits pour votre
+> activité, vos contrats, ni ce que vous faites par ailleurs de vos données.
+>
+> Deux chemins, et les deux sont défendables :
+>
+> **1. Faire relire** — comptez environ une heure chez un juriste. C'est le
+> choix sûr, et il se rentabilise dès le deuxième client si vous déployez pour
+> des tiers : le socle est le même, seuls changent le nom et l'adresse.
+>
+> **2. Publier en l'état, en assumant** — c'est votre droit. Sachez ce que
+> vous acceptez : une clause inexacte ou inopposable ne vous protège pas, elle
+> décore, et vous découvrirez laquelle au moment où vous en auriez eu besoin.
+> En cas de litige, publier un document juridique vous engage sur son contenu ;
+> personne ne demandera qui l'a rédigé.
+>
+> **En attendant votre décision**, les pages portent un bandeau « non relu par
+> un professionnel du droit ». Vos clients le voient.
+
+✅ **Selon la réponse :**
+
+- *Faire relire* → laisse tout en l'état. Le bandeau reste, c'est son rôle :
+  il empêche qu'un document sorte sans que personne ait tranché. Rappelle qu'il
+  faudra revenir passer `revue_juridique.effectuee` à `true`.
+- *Publier en assumant* → renseigne `revue_juridique.publication_assumee` avec
+  `acceptee: true`, le **nom et la qualité** de la personne qui décide, et la
+  date du jour. Le bandeau disparaît.
+
+**Ne coche jamais cette case à sa place, et jamais par défaut.** Un bandeau
+d'avertissement sur les CGU d'un artisan inquiète ses clients sans les
+protéger — mais le retirer est une décision qui appartient au dirigeant, et
+elle doit être datée et nommée.
+
+La décision n'est pas cachée pour autant : elle reste dans la configuration, et
+l'agent la rappelle à chaque démarrage dans ses journaux. Dis-le, ça rassure —
+ce n'est pas une case qu'on coche pour faire disparaître un problème.
 
 **Avant de générer, vérifie la zone.** `python -m agent.juridique --pays <code>`
 signale les pays où les gabarits sont à **refondre** et non à ajuster —

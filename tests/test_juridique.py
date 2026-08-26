@@ -361,3 +361,78 @@ def test_la_cli_charge_le_env(monkeypatch, tmp_path):
 
     source = inspect.getsource(j._cli)
     assert "load_dotenv" in source, "la CLI doit charger le .env comme le fait l'app"
+
+
+# ── Les trois états de la revue ──────────────────────────────────────────
+
+
+def _ctx(revue: dict):
+    from agent.juridique import contexte
+
+    return contexte({"revue_juridique": revue, "hebergeur": {}})
+
+
+def test_sans_decision_le_bandeau_est_affiche():
+    """
+    L'état par défaut. Le bandeau n'est pas une punition : il empêche qu'un
+    document sorte sans que personne ait tranché.
+    """
+    from agent.juridique import _bandeau
+
+    assert "non relu" in _bandeau(_ctx({})).lower()
+
+
+def test_apres_relecture_le_bandeau_disparait():
+    from agent.juridique import _bandeau
+
+    assert _bandeau(_ctx({"effectuee": True, "par": "Cabinet X"})) == ""
+
+
+def test_publication_assumee_retire_le_bandeau():
+    """
+    Publier sans relecture est un choix légitime. Un bandeau d'avertissement
+    sur les CGU d'un artisan inquiète ses clients sans les protéger.
+    """
+    from agent.juridique import _bandeau
+
+    c = _ctx({"publication_assumee": {"acceptee": True, "par": "M. Durand, gérant",
+                                      "date": "2026-08-24"}})
+    assert _bandeau(c) == ""
+    assert c["risque_assume"] is True
+    assert c["assume_par"] == "M. Durand, gérant"
+
+
+def test_une_acceptation_non_cochee_laisse_le_bandeau():
+    """Le bloc présent mais acceptee=false ne vaut pas décision."""
+    from agent.juridique import _bandeau
+
+    c = _ctx({"publication_assumee": {"acceptee": False, "par": "", "date": ""}})
+    assert "non relu" in _bandeau(c).lower()
+
+
+def test_le_bandeau_disparait_de_tous_les_documents():
+    """Un document oublié afficherait le bandeau alors que la décision est prise."""
+    from agent.juridique import DOCUMENTS, contexte
+
+    base = {
+        "entreprise": {"raison_sociale": "X SARL", "adresse": "1 rue A",
+                       "email": "a@b.test", "representant_legal": "Y, gérant",
+                       "forme_juridique": "SARL", "immatriculation": "SIREN 1"},
+        "protection_donnees": {"email": "a@b.test", "nom": "Y"},
+        "juridiction": {"pays": "France", "autorite_controle": "CNIL",
+                        "autorite_controle_url": "https://www.cnil.fr/fr/plaintes",
+                        "droit_applicable": "droit français", "tribunal": "Paris"},
+        "publication": {"url_publique": "https://x.test"},
+        "hebergeur": {"nom": "H", "adresse": "ailleurs", "pays_donnees": "France"},
+        "traitement": {"finalites": ["a"], "base_legale": "interet_legitime",
+                       "donnees_traitees": ["b"], "opt_in": "le client écrit"},
+        "integrateur": {"raison_sociale": "I SAS", "adresse": "2 rue B", "email": "i@b.test"},
+        "mode": "agence",
+    }
+    assume = dict(base, revue_juridique={
+        "publication_assumee": {"acceptee": True, "par": "Y", "date": "2026-08-24"}})
+    sans = dict(base, revue_juridique={})
+
+    for cle, (titre, fn) in DOCUMENTS.items():
+        assert "non relu" not in fn(contexte(assume)).lower(), f"{cle} affiche encore le bandeau"
+        assert "non relu" in fn(contexte(sans)).lower(), f"{cle} n'affiche pas le bandeau par défaut"

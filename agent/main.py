@@ -97,6 +97,27 @@ async def cycle_de_vie(app: FastAPI):
     if not alertes_configuration:
         logger.info("Revue de configuration : rien à signaler")
 
+    # Publier sans relecture juridique retire le bandeau des pages publiques —
+    # l'afficher aux clients ne les protège pas. La décision ne doit pas pour
+    # autant disparaître : on la rappelle à chaque démarrage, là où
+    # l'exploitant la voit et où un audit la retrouvera.
+    try:
+        from agent.juridique import charger as _charger_juridique
+
+        _conf_j = _charger_juridique()
+        if _conf_j:
+            _revue = _conf_j.get("revue_juridique") or {}
+            _assume = _revue.get("publication_assumee") or {}
+            if not _revue.get("effectuee") and _assume.get("acceptee"):
+                logger.warning(
+                    "Documents juridiques publiés SANS relecture par un "
+                    f"professionnel du droit — décision assumée par "
+                    f"{_assume.get('par') or 'non précisé'} "
+                    f"le {_assume.get('date') or 'sans date'}."
+                )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"État de la revue juridique illisible : {e}")
+
     await initialiser_base()
     await nettoyer_evenements_anciens()
     await purger_donnees_expirees()

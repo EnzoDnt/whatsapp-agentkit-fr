@@ -157,6 +157,7 @@ def contexte(conf: dict) -> dict:
                       heb.get("pays_donnees", "non précisé")))
 
     revue = conf.get("revue_juridique") or {}
+    assume = revue.get("publication_assumee") or {}
     return {
         **conf,
         "retention_jours": retention,
@@ -168,13 +169,33 @@ def contexte(conf: dict) -> dict:
         "revue_faite": bool(revue.get("effectuee")),
         "revue_par": revue.get("par") or "",
         "revue_date": revue.get("date") or "",
+        # Troisième état : publier sans relecture, en connaissance de cause.
+        # Le bandeau disparaît des pages publiques — un avertissement affiché
+        # aux clients d'un plombier les alarme sans les protéger, et signale
+        # une faiblesse à qui la cherche. Mais la décision reste datée et
+        # nommée dans la configuration, et rappelée au démarrage.
+        "risque_assume": bool(assume.get("acceptee")),
+        "assume_par": assume.get("par") or "",
+        "assume_date": assume.get("date") or "",
         "genere_le": date.today().isoformat(),
     }
 
 
 def _bandeau(c: dict) -> str:
-    """Avertissement affiché tant qu'aucun professionnel n'a relu les textes."""
-    if c["revue_faite"]:
+    """
+    Avertissement affiché tant que rien n'a été décidé.
+
+    Trois états, et un seul affiche le bandeau :
+
+    - relu par un professionnel      → pas de bandeau
+    - publication assumée sans revue → pas de bandeau, décision tracée ailleurs
+    - rien de tout cela (défaut)     → bandeau
+
+    Le bandeau n'est pas une punition : il évite qu'un document sorte sans que
+    personne ait tranché. Une fois la décision prise — dans un sens ou dans
+    l'autre — l'afficher aux clients ne protège plus personne.
+    """
+    if c["revue_faite"] or c["risque_assume"]:
         return ""
     return (
         "> ⚠️ **Document non relu par un professionnel du droit.**\n"
@@ -902,10 +923,23 @@ def _cli() -> int:
     problemes = verifier(conf)
     if not problemes:
         print("✅ config/juridique.yaml est complet et cohérent.")
-        if not (conf.get("revue_juridique") or {}).get("effectuee"):
-            print("\n⚠️  revue_juridique.effectuee vaut false : les pages publiées")
-            print("    portent un bandeau d'avertissement. C'est voulu tant qu'un")
-            print("    juriste n'a pas relu.")
+        revue = conf.get("revue_juridique") or {}
+        assume = revue.get("publication_assumee") or {}
+        if revue.get("effectuee"):
+            qui = revue.get("par") or "non précisé"
+            print(f"\n📄 Relu par {qui}. Pages publiées sans bandeau.")
+        elif assume.get("acceptee"):
+            qui = assume.get("par") or "non précisé"
+            quand = assume.get("date") or "sans date"
+            print(f"\n📄 Publication assumée sans relecture juridique.")
+            print(f"    Décidé par {qui}, le {quand}.")
+            print("    Les pages sont publiées sans bandeau. La décision reste")
+            print("    tracée ici et rappelée à chaque démarrage.")
+        else:
+            print("\n⚠️  Aucune décision prise : les pages portent un bandeau")
+            print("    « non relu par un professionnel du droit ».")
+            print("    Deux issues — faire relire (revue_juridique.effectuee),")
+            print("    ou assumer explicitement (publication_assumee.acceptee).")
         return 0
 
     print(f"❌ {len(problemes)} problème(s) :\n")

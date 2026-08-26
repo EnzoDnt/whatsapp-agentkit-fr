@@ -124,6 +124,31 @@ publication:
 # Ce n'est pas une formalité : c'est le garde-fou qui évite qu'un brouillon
 # généré en deux minutes finisse en production pendant trois ans.
 revue_juridique:
+  # ─── Cas 1 : un juriste a relu ───────────────────────────────────────────
   effectuee: false
   par: ""              # nom du cabinet ou du juriste
   date: ""             # AAAA-MM-JJ
+
+  # ─── Cas 2 : vous publiez SANS relecture, en connaissance de cause ───────
+  #
+  # C'est un choix légitime, et fréquent : la relecture coûte, et une petite
+  # structure peut décider d'assumer. Le bandeau d'avertissement disparaît
+  # alors des pages publiques — l'afficher aux clients ne les protège pas, ça
+  # les inquiète et ça signale une faiblesse à qui la cherche.
+  #
+  # Ce que vous acceptez en passant acceptee à true :
+  #
+  #   · Ces textes sont des gabarits. Ils n'ont pas été écrits pour VOTRE
+  #     activité, vos contrats, ni les traitements que vous menez par ailleurs.
+  #   · Une clause inexacte ou inopposable ne vous protège pas : elle décore.
+  #     Vous découvrirez laquelle au moment où vous en auriez eu besoin.
+  #   · En cas de contrôle ou de litige, publier un document juridique vous
+  #     engage sur son contenu. Personne ne vous demandera qui l'a rédigé.
+  #
+  # La décision reste datée et nommée ici, et rappelée à chaque démarrage dans
+  # les journaux. Elle n'est pas cachée, elle n'est simplement plus affichée
+  # aux clients.
+  publication_assumee:
+    acceptee: false
+    par: ""            # qui décide — nom et qualité
+    date: ""           # AAAA-MM-JJ

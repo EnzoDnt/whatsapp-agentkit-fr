@@ -207,6 +207,50 @@ d'une déclaration d'intention.
 - **Plafond de dépense et limite de débit** par correspondant.
 - **Transparence IA** paramétrable, appliquée à chaque conversation.
 
+## 7 bis. Le bandeau, et comment le retirer
+
+Tant qu'aucune décision n'est prise, chaque page publiée porte un avertissement
+« Document non relu par un professionnel du droit ». **Vos clients le voient.**
+
+Ce n'est pas une punition, c'est un garde-fou : il empêche qu'un document
+juridique sorte sans que personne ait tranché. Mais une fois la décision prise,
+l'afficher ne protège plus personne — sur les CGU d'un artisan, il inquiète
+sans informer, et signale une faiblesse à qui la cherche.
+
+**Trois états, deux façons de retirer le bandeau.**
+
+| État | Bandeau | Ce que ça veut dire |
+|---|:-:|---|
+| Rien de renseigné *(défaut)* | affiché | Personne n'a tranché |
+| `revue_juridique.effectuee: true` | retiré | Un juriste a relu |
+| `publication_assumee.acceptee: true` | retiré | Vous publiez en connaissance de cause |
+
+Le second chemin est légitime et fréquent. Ce que vous acceptez :
+
+- Ces textes sont des gabarits. Ils n'ont pas été écrits pour **votre** activité,
+  vos contrats, ni les traitements que vous menez par ailleurs.
+- Une clause inexacte ou inopposable ne vous protège pas : elle décore. Vous
+  découvrirez laquelle au moment où vous en auriez eu besoin.
+- Publier un document juridique vous engage sur son contenu. En cas de litige,
+  personne ne demandera qui l'a rédigé.
+
+La décision est **datée et nommée** dans `config/juridique.yaml`, et l'agent la
+rappelle à chaque démarrage dans ses journaux. Elle n'est pas cachée : elle
+n'est simplement plus affichée à vos clients.
+
+```yaml
+revue_juridique:
+  effectuee: false
+  publication_assumee:
+    acceptee: true
+    par: "Marie Dupont, gérante"
+    date: "2026-08-24"
+```
+
+L'assistant d'installation pose la question (`AGENTS.md`, Q6). Il a consigne de
+ne jamais cocher cette case à votre place : retirer l'avertissement est une
+décision de dirigeant, pas un réglage technique.
+
 ## 8. Après la mise en ligne
 
 - Passez `revue_juridique.effectuee` à `true` **une fois la relecture faite**,
