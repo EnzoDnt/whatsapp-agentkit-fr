@@ -486,3 +486,27 @@ def test_les_pages_juridiques_restent_indexables(conf):
     c = conf.contexte(conf.charger())
     html = conf.page_html("T", conf.politique_confidentialite(c), c)
     assert "noindex" not in html
+
+
+# ── La documentation vieillit moins vite qu'on ne le croit ───────────────
+
+
+def test_les_urls_legal_citees_dans_la_doc_existent(conf):
+    """
+    AGENTS.md dictait `/legal/conditions` à l'assistant d'installation, quand
+    la route est `/legal/cgu`. L'assistant l'aurait collée dans le champ Terms
+    of Service de l'app Meta, où un examinateur ouvre réellement l'adresse :
+    une App Review refusée, sans autre explication qu'un refus.
+
+    Le même test existe sur les documents publiés (ci-dessus) ; celui-ci couvre
+    ce que le kit *raconte*, pas seulement ce qu'il *génère*.
+    """
+    import re as _r
+
+    connues = set(conf.DOCUMENTS)
+    for md in sorted(RACINE.glob("*.md")):
+        for cible in _r.findall(r"/legal/([a-z-]+)", md.read_text()):
+            assert cible in connues, (
+                f"{md.name} cite /legal/{cible}, qui n'est pas un document. "
+                f"Documents : {sorted(connues)}"
+            )

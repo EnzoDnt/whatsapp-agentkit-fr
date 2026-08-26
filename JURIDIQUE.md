@@ -8,9 +8,9 @@
 >
 > Un document généré et jamais relu vous expose **plus** qu'il ne vous protège :
 > il établit que vous aviez conscience de l'obligation. Comptez une heure de
-> relecture professionnelle. Tant que `revue_juridique.effectuee` vaut `false`,
-> chaque page publiée affiche un bandeau d'avertissement — visible de vos
-> clients comme d'un examinateur Meta.
+> relecture professionnelle. Tant que rien n'est tranché, la console vous le
+> rappelle dans *Réglages → Documents juridiques* ; les pages publiques, elles,
+> ne portent aucun avertissement (§ 7 bis).
 
 ---
 
@@ -207,19 +207,22 @@ d'une déclaration d'intention.
 - **Plafond de dépense et limite de débit** par correspondant.
 - **Transparence IA** paramétrable, appliquée à chaque conversation.
 
-## 7 bis. Le bandeau, et comment le retirer
+## 7 bis. L'avertissement de relecture, et la décision qu'il attend
 
-Tant qu'aucune décision n'est prise, chaque page publiée porte un avertissement
-« Document non relu par un professionnel du droit ». **Vos clients le voient.**
+Tant qu'aucune décision n'est prise, la console affiche « Documents non relus
+par un professionnel du droit » dans **Réglages → Documents juridiques**.
+**Vous seul le voyez.**
 
 Ce n'est pas une punition, c'est un garde-fou : il empêche qu'un document
-juridique sorte sans que personne ait tranché. Mais une fois la décision prise,
-l'afficher ne protège plus personne — sur les CGU d'un artisan, il inquiète
-sans informer, et signale une faiblesse à qui la cherche.
+juridique sorte sans que personne ait tranché. Les pages publiques, elles, n'en
+portent pas, et c'est délibéré — sur les CGU d'un artisan, un bandeau « non
+relu » inquiète ses clients sans les informer, et signale une faiblesse à qui
+la cherche. L'avertissement s'adresse à celui qui peut agir, pas à celui qui
+vient lire vos horaires.
 
-**Trois états, deux façons de retirer le bandeau.**
+**Trois états, deux façons de retirer l'avertissement.**
 
-| État | Bandeau | Ce que ça veut dire |
+| État | Avertissement console | Ce que ça veut dire |
 |---|:-:|---|
 | Rien de renseigné *(défaut)* | affiché | Personne n'a tranché |
 | `revue_juridique.effectuee: true` | retiré | Un juriste a relu |
@@ -235,8 +238,8 @@ Le second chemin est légitime et fréquent. Ce que vous acceptez :
   personne ne demandera qui l'a rédigé.
 
 La décision est **datée et nommée** dans `config/juridique.yaml`, et l'agent la
-rappelle à chaque démarrage dans ses journaux. Elle n'est pas cachée : elle
-n'est simplement plus affichée à vos clients.
+rappelle à chaque démarrage dans ses journaux. Elle n'est pas cachée : elle est
+consignée, simplement plus rappelée à chaque visite de la console.
 
 ```yaml
 revue_juridique:
@@ -249,12 +252,15 @@ revue_juridique:
 
 L'assistant d'installation pose la question (`AGENTS.md`, Q6). Il a consigne de
 ne jamais cocher cette case à votre place : retirer l'avertissement est une
-décision de dirigeant, pas un réglage technique.
+décision de dirigeant, pas un réglage technique. Vous pouvez la reprendre à
+tout moment depuis la console, dans **Réglages → Documents juridiques**, qui
+affiche aussi les trois URL à coller dans votre app Meta (§ 3).
 
 ## 8. Après la mise en ligne
 
 - Passez `revue_juridique.effectuee` à `true` **une fois la relecture faite**,
-  avec le nom du relecteur et la date. Le bandeau disparaît alors des pages.
+  avec le nom du relecteur et la date. L'avertissement disparaît alors de la
+  console.
 - Mettez à jour `publication.derniere_revision` à chaque modification.
 - Rejouez la vérification des URL dans Meta après tout changement de domaine.
 - Reprenez les documents si vous changez de fournisseur d'IA, d'hébergeur, ou
