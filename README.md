@@ -153,6 +153,22 @@ c'est justement là qu'un humain doit intervenir.
 
 ---
 
+### Documents juridiques
+
+**Réglages → Documents juridiques.** Les six pages publiées par l'agent y sont
+listées avec leur lien, et c'est de là que se prend la seule décision qui
+revient à l'exploitant : afficher ou non l'avertissement « Document non relu
+par un professionnel du droit » sur des pages que ses clients consultent.
+
+Trois états, et un seul affiche le bandeau : rien de tranché *(défaut)*,
+publication assumée sans relecture, ou relecture faite. Les deux derniers
+exigent un **nom** — retirer un avertissement juridique engage, la décision
+ne peut pas être anonyme. Elle est datée dans `config/juridique.yaml` et
+rappelée à chaque démarrage dans les journaux.
+
+L'écriture ne touche que le bloc `revue_juridique` : les commentaires du
+fichier sont préservés, car ce sont eux qui portent les avertissements.
+
 ### Mot de passe de console perdu
 
 Il n'y a pas d'envoi d'e-mail de réinitialisation : l'agent n'a pas de serveur

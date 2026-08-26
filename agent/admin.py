@@ -990,6 +990,74 @@ def lire_marque() -> dict:
     }
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# Documents juridiques
+# ═════════════════════════════════════════════════════════════════════════
+
+
+@routeur.get("/juridique", dependencies=[Depends(verifier_jeton)])
+async def lire_juridique():
+    """
+    L'état des documents publiés, et les liens pour les relire.
+
+    Sans cette vue, les documents existaient sur /legal sans que personne ne
+    sache où — et la décision sur le bandeau se prenait en éditant un fichier
+    YAML à la main, ce qui n'est pas une opération d'exploitant.
+    """
+    from agent.juridique import DOCUMENTS, charger, etat_publication, verifier
+
+    conf = charger()
+    if conf is None:
+        return {
+            "configure": False,
+            "explication": (
+                "config/juridique.yaml est absent : aucun document n'est publié. "
+                "Copiez config/juridique.exemple.yaml, remplissez-le, redéployez."
+            ),
+        }
+
+    base = (conf.get("publication") or {}).get("url_publique", "").rstrip("/")
+    return {
+        "configure": True,
+        "url_publique": base,
+        "documents": [
+            {"cle": cle, "titre": titre, "url": f"{base}/legal/{cle}"}
+            for cle, (titre, _) in DOCUMENTS.items()
+        ],
+        "etat": etat_publication(conf),
+        "problemes": verifier(conf),
+        "entreprise": (conf.get("entreprise") or {}).get("raison_sociale", ""),
+        "mode": conf.get("mode", "direct"),
+    }
+
+
+@routeur.post("/juridique/decision", dependencies=[Depends(verifier_jeton)])
+async def ecrire_decision_juridique(corps: dict, request: Request):
+    """
+    Pose la décision sur le bandeau d'avertissement.
+
+    Trois états seulement : rien de tranché (bandeau affiché), publication
+    assumée sans relecture, ou relecture faite. La décision est NOMMÉE et
+    datée : retirer un avertissement juridique est un acte d'engagement, pas
+    une préférence d'affichage.
+    """
+    from agent.juridique import ErreurJuridique, enregistrer_decision
+
+    u = await utilisateur_courant(request)
+    decision = (corps.get("decision") or "").strip()
+    par = (corps.get("par") or "").strip() or f"{u.nom} ({u.email})"
+
+    try:
+        enregistrer_decision(decision, par)
+    except ErreurJuridique as e:
+        raise HTTPException(400, str(e)) from e
+
+    logger.warning(
+        f"Décision juridique « {decision} » posée par {u.email} — au nom de : {par}"
+    )
+    return {"statut": "ok", "decision": decision, "par": par}
+
+
 @routeur.get("/marque", dependencies=[Depends(verifier_jeton)])
 async def marque():
     m = lire_marque()
