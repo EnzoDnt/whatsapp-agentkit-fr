@@ -404,3 +404,136 @@ async def definir_activation(identifiant: int, actif: bool, demandeur_id: int) -
 
     logger.info(f"Compte {'réactivé' if actif else 'désactivé'} : {courriel}")
     return courriel
+
+
+# ── Récupération d'accès à la console ────────────────────────────────────
+#
+# changer_mot_de_passe() exige l'ancien : c'est correct pour un utilisateur
+# connecté, et sans issue pour quelqu'un enfermé dehors. Sans cette voie, un
+# mot de passe oublié rendait la console définitivement inaccessible — il
+# fallait ouvrir la base à la main, ce qu'on ne demande pas à quelqu'un qui
+# n'est pas développeur.
+#
+# S'exécute SUR LE SERVEUR, là où la base est joignable, et exige ADMIN_TOKEN :
+# le même secret que celui qui a servi à créer le premier compte.
+
+
+async def lister_utilisateurs_console() -> list[dict]:
+    """Les comptes existants, pour lever le doute sur l'adresse saisie."""
+    from sqlalchemy import select
+
+    from agent.memory import Session
+
+    async with Session() as session:
+        r = await session.execute(select(Utilisateur).order_by(Utilisateur.id))
+        return [
+            {
+                "id": u.id,
+                "email": u.email,
+                "nom": u.nom,
+                "actif": u.actif,
+                "cree_le": u.cree_le.strftime("%Y-%m-%d %H:%M") if u.cree_le else "",
+            }
+            for u in r.scalars()
+        ]
+
+
+async def reinitialiser_mot_de_passe(email: str, nouveau: str) -> str:
+    """
+    Repose le mot de passe d'un compte, sans connaître l'ancien.
+
+    Réactive le compte au passage : un compte désactivé dont on réinitialise
+    le mot de passe laisserait la personne dehors sans lui dire pourquoi.
+    """
+    from sqlalchemy import select
+
+    from agent.memory import Session
+
+    if len(nouveau) < 12:
+        raise ValueError("Mot de passe trop court : 12 caractères au minimum.")
+
+    async with Session() as session:
+        r = await session.execute(
+            select(Utilisateur).where(Utilisateur.email == email.strip().lower())
+        )
+        u = r.scalar_one_or_none()
+        if u is None:
+            raise ValueError(f"Aucun compte pour « {email} ».")
+        empreinte, sel = hacher(nouveau)
+        u.empreinte, u.sel, u.actif = empreinte, sel, True
+        await session.commit()
+        return u.email
+
+
+def _cli() -> int:
+    import argparse
+    import asyncio
+    import getpass
+    import hmac as _hmac
+
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    p = argparse.ArgumentParser(
+        prog="python -m agent.auth",
+        description="Récupération d'accès à la console. À exécuter SUR LE SERVEUR.",
+    )
+    p.add_argument("--lister", action="store_true", help="liste les comptes existants")
+    p.add_argument("--reinitialiser", metavar="EMAIL",
+                   help="repose le mot de passe d'un compte")
+    a = p.parse_args()
+
+    if not a.lister and not a.reinitialiser:
+        p.print_help()
+        return 2
+
+    jeton = os.getenv("ADMIN_TOKEN", "").strip()
+    if not jeton:
+        print("ADMIN_TOKEN absent de l'environnement : opération refusée.")
+        return 1
+    fourni = getpass.getpass("ADMIN_TOKEN : ").strip()
+    if not _hmac.compare_digest(fourni, jeton):
+        print("Jeton incorrect.")
+        return 1
+
+    from agent.memory import initialiser_base
+
+    async def _run() -> int:
+        await initialiser_base()
+
+        if a.lister:
+            comptes = await lister_utilisateurs_console()
+            if not comptes:
+                print("\nAucun compte. La console proposera l'amorçage.")
+                return 0
+            print(f"\n{len(comptes)} compte(s) :\n")
+            for c in comptes:
+                etat = "" if c["actif"] else "  ⚠️ DÉSACTIVÉ"
+                print(f"  [{c['id']}] {c['email']}  ({c['nom']}, créé le {c['cree_le']}){etat}")
+            print("\nL'adresse doit correspondre EXACTEMENT à celle saisie dans le")
+            print("formulaire. La console affiche le même message pour un e-mail")
+            print("inconnu et un mot de passe faux — pour ne pas révéler quelles")
+            print("adresses ont un compte.")
+            return 0
+
+        # Le mot de passe est saisi ici, jamais passé en argument : un argument
+        # reste dans l'historique du shell et dans la liste des processus.
+        nouveau = getpass.getpass("Nouveau mot de passe (12 car. minimum) : ")
+        if nouveau != getpass.getpass("Confirmez : "):
+            print("Les deux saisies diffèrent.")
+            return 1
+        try:
+            email = await reinitialiser_mot_de_passe(a.reinitialiser, nouveau)
+        except ValueError as e:
+            print(f"{e}")
+            return 1
+        print(f"\n✅ Mot de passe reposé pour {email}. Le compte est actif.")
+        print("   Les sessions ouvertes restent valides jusqu'à leur expiration.")
+        return 0
+
+    return asyncio.run(_run())
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())
