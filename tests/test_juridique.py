@@ -188,3 +188,251 @@ def test_la_configuration_juridique_est_exclue_du_depot():
     """
     lignes = (RACINE / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "config/juridique.yaml" in lignes
+
+
+# ── Vérification assistée ────────────────────────────────────────────────
+
+
+def _conf_valide():
+    return {
+        "mode": "direct",
+        "entreprise": {
+            "raison_sociale": "Plomberie Durand SARL",
+            "adresse": "3 rue des Lilas, 93100 Montreuil",
+            "email": "contact@plomberie-durand.test",
+            "representant_legal": "Alex Durand, gérant",
+        },
+        "protection_donnees": {"email": "donnees@plomberie-durand.test"},
+        "juridiction": {
+            "pays": "France",
+            "pays_code": "FR",
+            "autorite_controle": "CNIL",
+            "autorite_controle_url": "https://www.cnil.fr/fr/plaintes",
+        },
+        "publication": {"url_publique": "https://agent.plomberie-durand.test"},
+        "hebergeur": {"nom": "Hetzner Online GmbH", "adresse": "Gunzenhausen, Allemagne"},
+    }
+
+
+def test_une_configuration_complete_passe():
+    from agent.juridique import verifier
+
+    assert verifier(_conf_valide()) == []
+
+
+def test_les_valeurs_de_l_exemple_sont_refusees():
+    """
+    Le piège principal : recopier l'exemple sans le remplir produit des
+    documents d'apparence officielle au nom d'une entreprise qui n'existe pas.
+    """
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["entreprise"]["raison_sociale"] = "Maison Lorette"
+    problemes = verifier(c)
+    assert any("Maison Lorette" in p for p in problemes)
+
+
+def test_un_champ_obligatoire_vide_est_signale():
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["entreprise"]["representant_legal"] = ""
+    assert any("representant_legal" in p for p in verifier(c))
+
+
+def test_une_autorite_incoherente_avec_le_pays_est_signalee():
+    """
+    Une URL d'autorité fausse envoie la personne dans le vide au moment où elle
+    exerce un droit — c'est pire que de ne rien indiquer.
+    """
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["juridiction"]["autorite_controle_url"] = "https://ico.org.uk/make-a-complaint/"
+    assert any("autorite_controle_url" in p for p in verifier(c))
+
+
+def test_toutes_les_autorites_ont_une_url_https():
+    from agent.juridique import AUTORITES
+
+    for code, (nom, url, loi) in AUTORITES.items():
+        assert url.startswith("https://"), f"{code} : URL non HTTPS"
+        assert nom and loi, f"{code} : entrée incomplète"
+
+
+def test_les_zones_a_refondre_sont_documentees():
+    """Un pays signalé comme « à refondre » doit expliquer pourquoi."""
+    from agent.juridique import AUTORITES, ZONES_A_REFONDRE
+
+    for code, motif in ZONES_A_REFONDRE.items():
+        assert code in AUTORITES, f"{code} absent de AUTORITES"
+        assert len(motif) > 80, f"{code} : motif trop vague pour être utile"
+
+
+def test_l_hebergeur_sans_adresse_est_signale():
+    """La LCEN impose une adresse joignable pour l'hébergeur."""
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["hebergeur"]["adresse"] = ""
+    assert any("hebergeur.adresse" in p for p in verifier(c))
+
+
+def test_une_duree_de_conservation_dupliquee_est_refusee():
+    """
+    Déclarée ici ET dans RETENTION_JOURS, elle se contredit au premier
+    changement de configuration.
+    """
+    from agent.juridique import verifier
+
+    c = _conf_valide()
+    c["traitement"] = {"conservation_jours": 30}
+    assert any("conservation_jours" in p for p in verifier(c))
+
+
+# ── Recherche d'entreprise ───────────────────────────────────────────────
+
+
+def test_les_formes_juridiques_courantes_sont_traduites():
+    """
+    Écrire « SARL » sur une SAS est une erreur de mentions légales. Un code
+    inconnu doit s'avouer, pas se deviner.
+    """
+    from agent.juridique import forme_juridique
+
+    assert "SAS" in forme_juridique("5710")
+    assert "SARL" in forme_juridique("5499")
+    assert forme_juridique("") == ""
+    inconnu = forme_juridique("9999")
+    assert "9999" in inconnu and "confirmer" in inconnu
+
+
+def test_la_recherche_ne_leve_jamais(monkeypatch):
+    """Un annuaire indisponible ne doit pas interrompre une installation."""
+    import agent.juridique as j
+
+    def explose(*a, **k):
+        raise OSError("réseau coupé")
+
+    monkeypatch.setattr("urllib.request.urlopen", explose)
+    assert j.chercher_entreprise("peu importe") == []
+
+
+def test_la_recherche_normalise_la_reponse(monkeypatch):
+    """Le format de l'annuaire ne doit pas fuir dans le reste du kit."""
+    import io
+    import json
+
+    import agent.juridique as j
+
+    charge = {
+        "results": [{
+            "nom_complet": "PLOMBERIE DURAND",
+            "siren": "123456789",
+            "nature_juridique": "5499",
+            "etat_administratif": "A",
+            "siege": {"siret": "12345678900012", "adresse": "3 RUE DES LILAS 93100 MONTREUIL"},
+            "dirigeants": [{"nom": "DURAND", "prenoms": "ALEX", "qualite": "Gérant"}],
+        }]
+    }
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *a, **k: io.BytesIO(json.dumps(charge).encode()),
+    )
+    r = j.chercher_entreprise("Plomberie Durand")[0]
+    assert r["raison_sociale"] == "PLOMBERIE DURAND"
+    assert r["siret"] == "12345678900012"
+    assert "SARL" in r["forme_juridique"]
+    assert r["representants"] == ["Alex Durand, Gérant"]
+
+
+def test_la_cli_charge_le_env(monkeypatch, tmp_path):
+    """
+    Les autres modules chargent le .env à l'import ; la ligne de commande ne
+    passe par aucun d'eux. Sans chargement explicite, --connu et --verifier
+    lisent les valeurs par défaut et annoncent « anthropic / 90 jours » alors
+    que le déploiement tourne sur autre chose. L'assistant écrirait alors une
+    politique de confidentialité qui contredit la configuration réelle.
+    """
+    import inspect
+
+    import agent.juridique as j
+
+    source = inspect.getsource(j._cli)
+    assert "load_dotenv" in source, "la CLI doit charger le .env comme le fait l'app"
+
+
+# ── Les trois états de la revue ──────────────────────────────────────────
+
+
+def _ctx(revue: dict):
+    from agent.juridique import contexte
+
+    return contexte({"revue_juridique": revue, "hebergeur": {}})
+
+
+def test_sans_decision_le_bandeau_est_affiche():
+    """
+    L'état par défaut. Le bandeau n'est pas une punition : il empêche qu'un
+    document sorte sans que personne ait tranché.
+    """
+    from agent.juridique import _bandeau
+
+    assert "non relu" in _bandeau(_ctx({})).lower()
+
+
+def test_apres_relecture_le_bandeau_disparait():
+    from agent.juridique import _bandeau
+
+    assert _bandeau(_ctx({"effectuee": True, "par": "Cabinet X"})) == ""
+
+
+def test_publication_assumee_retire_le_bandeau():
+    """
+    Publier sans relecture est un choix légitime. Un bandeau d'avertissement
+    sur les CGU d'un artisan inquiète ses clients sans les protéger.
+    """
+    from agent.juridique import _bandeau
+
+    c = _ctx({"publication_assumee": {"acceptee": True, "par": "M. Durand, gérant",
+                                      "date": "2026-08-24"}})
+    assert _bandeau(c) == ""
+    assert c["risque_assume"] is True
+    assert c["assume_par"] == "M. Durand, gérant"
+
+
+def test_une_acceptation_non_cochee_laisse_le_bandeau():
+    """Le bloc présent mais acceptee=false ne vaut pas décision."""
+    from agent.juridique import _bandeau
+
+    c = _ctx({"publication_assumee": {"acceptee": False, "par": "", "date": ""}})
+    assert "non relu" in _bandeau(c).lower()
+
+
+def test_le_bandeau_disparait_de_tous_les_documents():
+    """Un document oublié afficherait le bandeau alors que la décision est prise."""
+    from agent.juridique import DOCUMENTS, contexte
+
+    base = {
+        "entreprise": {"raison_sociale": "X SARL", "adresse": "1 rue A",
+                       "email": "a@b.test", "representant_legal": "Y, gérant",
+                       "forme_juridique": "SARL", "immatriculation": "SIREN 1"},
+        "protection_donnees": {"email": "a@b.test", "nom": "Y"},
+        "juridiction": {"pays": "France", "autorite_controle": "CNIL",
+                        "autorite_controle_url": "https://www.cnil.fr/fr/plaintes",
+                        "droit_applicable": "droit français", "tribunal": "Paris"},
+        "publication": {"url_publique": "https://x.test"},
+        "hebergeur": {"nom": "H", "adresse": "ailleurs", "pays_donnees": "France"},
+        "traitement": {"finalites": ["a"], "base_legale": "interet_legitime",
+                       "donnees_traitees": ["b"], "opt_in": "le client écrit"},
+        "integrateur": {"raison_sociale": "I SAS", "adresse": "2 rue B", "email": "i@b.test"},
+        "mode": "agence",
+    }
+    assume = dict(base, revue_juridique={
+        "publication_assumee": {"acceptee": True, "par": "Y", "date": "2026-08-24"}})
+    sans = dict(base, revue_juridique={})
+
+    for cle, (titre, fn) in DOCUMENTS.items():
+        assert "non relu" not in fn(contexte(assume)).lower(), f"{cle} affiche encore le bandeau"
+        assert "non relu" in fn(contexte(sans)).lower(), f"{cle} n'affiche pas le bandeau par défaut"

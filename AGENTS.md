@@ -80,6 +80,8 @@ gauche.
 | Vérifier qu'aucun secret n'est publié | `git ls-files` |
 | Construire et tester l'image Docker | `docker build` |
 | Installer et lancer un tunnel HTTPS public | `brew install cloudflared` puis `cloudflared tunnel --url` |
+| **Rédiger les documents juridiques** (confidentialité, CGU, mentions, IA) | `config/juridique.yaml` puis `python -m agent.juridique --verifier` |
+| Trouver l'autorité de contrôle d'un pays | `python -m agent.juridique --pays <code>` |
 | Générer les secrets (verify token, sel de hachage) | `openssl rand -hex 24` |
 | Écrire le `.env` | édition de fichier |
 | Lancer le simulateur et vérifier que l'agent répond | `make simulateur` |
@@ -96,6 +98,7 @@ gauche.
 | Vérification d'entreprise (production seulement) | Contrôle d'identité Meta, 2 à 4 jours |
 | Créer un compte GitHub, Railway, Coolify ou un VPS | Aucune API de création de compte |
 | Saisir les variables d'environnement chez l'hébergeur | Console web, avec ses identifiants |
+| Faire relire les documents juridiques par un juriste | Ce n'est pas un avis juridique, et personne ici ne connaît son activité |
 
 **Si le MCP Meta n'est pas connecté**, ne bloque pas : avec le token d'accès tu
 peux faire la même chose en `curl` sur la Graph API (`POST /{app_id}/subscriptions`).
@@ -258,6 +261,207 @@ logo: "logo.png"
 
 **Vérification** : recharge `/admin` — le logo et le nom apparaissent en haut de
 la barre latérale.
+
+### Étape 2 ter — Les documents juridiques
+
+**C'est toi qui les produis.** Ne renvoie pas la personne vers un générateur en
+ligne ni vers `JURIDIQUE.md` : ce fichier est ta référence, pas ses devoirs.
+
+Meta **exige** une URL de politique de confidentialité dans les paramètres de
+l'app — sans elle, pas d'App Review ni de passage en Live. Le RGPD impose les
+mêmes informations, et l'AI Act la mention d'IA. L'agent sert ces pages
+lui-même sur `/legal` : rien à héberger ailleurs.
+
+**Ce que tu remplis seul — ne le demande jamais**
+
+| Champ | D'où il vient |
+|---|---|
+| `entreprise.*` (nom, adresse, téléphone, email) | déjà collecté à l'étape 2, dans `config/entreprise.yaml` |
+| `hebergeur.*` | tu viens de le choisir — table `HEBERGEURS` dans `agent/juridique.py` |
+| `juridiction.autorite_controle` et son URL | `python -m agent.juridique --pays FR` |
+| `publication.url_publique` | l'adresse que tu viens de déployer |
+| `publication.derniere_revision` | la date du jour |
+| Conservation, fournisseur d'IA, transparence, sous-traitants | lus dans le `.env` — **ne les recopie pas**, ils seraient contredits au premier changement |
+
+`python -m agent.juridique --connu` t'affiche ce dernier bloc en JSON.
+
+**Cherche avant de demander — France**
+
+Raison sociale, SIREN, forme juridique, adresse et dirigeants sont **publics**.
+Faire taper un SIRET de mémoire, c'est se garantir un numéro faux dans des
+mentions légales : une erreur qu'aucun test ne rattrape et qui ne se voit qu'en
+contrôle.
+
+```bash
+python -m agent.juridique --chercher "nom de l'entreprise"
+```
+
+Tu obtiens tout le bloc `entreprise` d'un coup. Tu ne demandes plus qu'à
+**confirmer**, ce qui est autrement plus fiable que de faire dicter.
+
+Hors de France, ou si l'annuaire ne trouve rien, pose les questions ci-dessous.
+
+**Les questions — une seule à la fois, et attends la réponse**
+
+Emploie les mots du dirigeant, pas ceux du juriste. Personne ne dit « ma
+dénomination sociale » : on dit « le nom de ma boîte ».
+
+---
+
+**Q1 — Identifier l'entreprise**
+
+> **Comment s'appelle exactement l'entreprise ?**
+> Le nom qui figure sur vos factures, pas l'enseigne commerciale si elle diffère.
+> Si vous avez le numéro SIRET sous la main, il ira encore plus vite.
+
+✅ Lance `--chercher` avec la réponse. Puis présente ce que tu trouves :
+
+> Je trouve **{raison_sociale}**, {forme_juridique}, SIREN {siren}, au
+> {adresse}, avec {representant} comme représentant.
+> **C'est bien ça ?**
+
+Si plusieurs résultats, montre-les numérotés et fais choisir. Si l'annuaire
+indique un établissement fermé, signale-le : c'est souvent un déménagement mal
+répercuté, parfois une erreur de saisie de ta part.
+
+---
+
+**Q2 — Le représentant légal** *(si l'annuaire ne l'a pas donné, ou pour confirmer)*
+
+> **Qui représente légalement l'entreprise ?**
+> Le nom et la fonction — « Marie Dupont, gérante » ou « Paul Martin, président ».
+> C'est la personne qui engage l'entreprise, pas forcément vous.
+
+⚠️ Fais toujours confirmer, même si l'annuaire l'a donné : les changements de
+dirigeant y arrivent avec du retard.
+
+---
+
+**Q3 — L'adresse des demandes RGPD**
+
+> **À quelle adresse e-mail un client doit-il écrire s'il veut consulter ou
+> faire effacer ses données ?**
+> Ça peut être votre adresse de contact habituelle, {email_deja_connu} — c'est
+> le cas le plus courant. Une boîte dédiée n'a de sens que si quelqu'un la
+> relève vraiment.
+
+✅ Propose l'e-mail déjà collecté à l'étape 2 et laisse confirmer d'un mot.
+Ne fais pas retaper ce que tu connais.
+
+---
+
+**Q4 — Le délégué à la protection des données**
+
+> **Avez-vous désigné un DPO — un délégué à la protection des données ?**
+> C'est une personne officiellement chargée du sujet, déclarée à la CNIL.
+> **La plupart des PME n'en ont pas, et ce n'est pas obligatoire** : il ne l'est
+> que pour les organismes publics, la surveillance à grande échelle, ou le
+> traitement massif de données sensibles. Un agent WhatsApp de PME n'entre dans
+> aucun de ces cas.
+
+✅ Un « non » est la réponse normale : `dpo_designe: false`, et c'est le
+représentant légal qui devient le contact. N'insiste pas, et surtout ne laisse
+pas croire qu'il en faudrait un.
+
+---
+
+**Q5 — Pour qui tu installes** *(souvent déductible ; confirme en une phrase)*
+
+> **Cet agent, c'est pour votre propre entreprise, ou vous l'installez pour un
+> client ?**
+
+`direct` dans le premier cas. `agence` dans le second : le client reste
+responsable de traitement, tu deviens sous-traitant, et une annexe de
+sous-traitance (art. 28 RGPD) est générée en plus.
+
+---
+
+**Reformule avant d'écrire.** Comme à l'étape 2 : récapitule ce que tu as
+compris en trois lignes, fais valider, puis écris le fichier. Une raison
+sociale mal orthographiée dans des mentions légales se corrige mal une fois
+les URL déposées chez Meta.
+
+**Le mode**
+
+`direct` si l'entreprise déploie son propre agent. `agence` si tu installes
+pour le compte d'un client : le client reste responsable de traitement,
+l'intégrateur devient sous-traitant, et une annexe de sous-traitance (art. 28
+RGPD) est générée en plus. Déduis-le du contexte, confirme en une phrase.
+
+**Tu écris, puis tu vérifies**
+
+```bash
+python -m agent.juridique --verifier
+```
+
+Il refuse un fichier incomplet, et surtout il détecte les valeurs recopiées de
+l'exemple — « Maison Lorette » dans les mentions légales d'un plombier produit
+un document d'apparence officielle au nom d'une entreprise qui n'existe pas.
+Ne dis pas que c'est fait tant que cette commande n'affiche pas ✅.
+
+**Les URL dans Meta** — une fois l'adresse publique stable (étape 4) :
+
+```
+Politique de confidentialité : https://<adresse>/legal/confidentialite
+Conditions d'utilisation     : https://<adresse>/legal/conditions
+Suppression des données      : https://<adresse>/legal/suppression
+```
+
+Tente d'abord l'API — `POST /{app_id}` accepte `privacy_policy_url` et
+`terms_of_service_url` avec un jeton d'application. Si elle refuse, c'est un
+bloc « J'ai besoin de toi » : ces trois champs se posent dans **Paramètres →
+Général** du tableau de bord Meta.
+
+**Q6 — La relecture juridique, et le bandeau**
+
+Ne présente pas la relecture comme acquise : elle coûte, et beaucoup de petites
+structures décident de s'en passer. Ton rôle est qu'elles décident, pas
+qu'elles subissent.
+
+> **Ces documents doivent-ils être relus par un juriste avant publication ?**
+>
+> Ce sont des gabarits sérieux : ils couvrent ce que Meta exige et ce que le
+> RGPD impose dans le cas courant. Mais ils n'ont pas été écrits pour votre
+> activité, vos contrats, ni ce que vous faites par ailleurs de vos données.
+>
+> Deux chemins, et les deux sont défendables :
+>
+> **1. Faire relire** — comptez environ une heure chez un juriste. C'est le
+> choix sûr, et il se rentabilise dès le deuxième client si vous déployez pour
+> des tiers : le socle est le même, seuls changent le nom et l'adresse.
+>
+> **2. Publier en l'état, en assumant** — c'est votre droit. Sachez ce que
+> vous acceptez : une clause inexacte ou inopposable ne vous protège pas, elle
+> décore, et vous découvrirez laquelle au moment où vous en auriez eu besoin.
+> En cas de litige, publier un document juridique vous engage sur son contenu ;
+> personne ne demandera qui l'a rédigé.
+>
+> **En attendant votre décision**, les pages portent un bandeau « non relu par
+> un professionnel du droit ». Vos clients le voient.
+
+✅ **Selon la réponse :**
+
+- *Faire relire* → laisse tout en l'état. Le bandeau reste, c'est son rôle :
+  il empêche qu'un document sorte sans que personne ait tranché. Rappelle qu'il
+  faudra revenir passer `revue_juridique.effectuee` à `true`.
+- *Publier en assumant* → renseigne `revue_juridique.publication_assumee` avec
+  `acceptee: true`, le **nom et la qualité** de la personne qui décide, et la
+  date du jour. Le bandeau disparaît.
+
+**Ne coche jamais cette case à sa place, et jamais par défaut.** Un bandeau
+d'avertissement sur les CGU d'un artisan inquiète ses clients sans les
+protéger — mais le retirer est une décision qui appartient au dirigeant, et
+elle doit être datée et nommée.
+
+La décision n'est pas cachée pour autant : elle reste dans la configuration, et
+l'agent la rappelle à chaque démarrage dans ses journaux. Dis-le, ça rassure —
+ce n'est pas une case qu'on coche pour faire disparaître un problème.
+
+**Avant de générer, vérifie la zone.** `python -m agent.juridique --pays <code>`
+signale les pays où les gabarits sont à **refondre** et non à ajuster —
+Québec (Loi 25) et États-Unis (CCPA, TCPA) notamment. Dis-le **avant**, pas
+après. Et rappelle la règle qui prime : c'est la localisation des **clients**
+qui décide du droit applicable, pas celle de l'entreprise.
 
 ### Étape 3 bis — Back-office (optionnel, recommandé)
 
