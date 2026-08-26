@@ -156,12 +156,14 @@ c'est justement là qu'un humain doit intervenir.
 ### Documents juridiques
 
 **Réglages → Documents juridiques.** Les six pages publiées par l'agent y sont
-listées avec leur lien, et c'est de là que se prend la seule décision qui
-revient à l'exploitant : afficher ou non l'avertissement « Document non relu
-par un professionnel du droit » sur des pages que ses clients consultent.
+listées avec leur lien, ainsi que les trois URL à coller dans l'app Meta. C'est
+de là que se prend la seule décision qui revient à l'exploitant : ces textes
+ont-ils été relus par un juriste, ou les publie-t-on en le sachant ?
 
-Trois états, et un seul affiche le bandeau : rien de tranché *(défaut)*,
-publication assumée sans relecture, ou relecture faite. Les deux derniers
+Tant que rien n'est tranché, un avertissement s'affiche **ici et nulle part
+ailleurs** — les pages publiques n'en portent pas. Trois états : rien de
+tranché *(défaut)*, publication assumée sans relecture, ou relecture faite.
+Les deux derniers
 exigent un **nom** — retirer un avertissement juridique engage, la décision
 ne peut pas être anonyme. Elle est datée dans `config/juridique.yaml` et
 rappelée à chaque démarrage dans les journaux.

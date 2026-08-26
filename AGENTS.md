@@ -403,7 +403,7 @@ Ne dis pas que c'est fait tant que cette commande n'affiche pas ✅.
 
 ```
 Politique de confidentialité : https://<adresse>/legal/confidentialite
-Conditions d'utilisation     : https://<adresse>/legal/conditions
+Conditions d'utilisation     : https://<adresse>/legal/cgu
 Suppression des données      : https://<adresse>/legal/suppression
 ```
 
@@ -412,7 +412,7 @@ Tente d'abord l'API — `POST /{app_id}` accepte `privacy_policy_url` et
 bloc « J'ai besoin de toi » : ces trois champs se posent dans **Paramètres →
 Général** du tableau de bord Meta.
 
-**Q6 — La relecture juridique, et le bandeau**
+**Q6 — La relecture juridique**
 
 Ne présente pas la relecture comme acquise : elle coûte, et beaucoup de petites
 structures décident de s'en passer. Ton rôle est qu'elles décident, pas
@@ -436,22 +436,25 @@ qu'elles subissent.
 > En cas de litige, publier un document juridique vous engage sur son contenu ;
 > personne ne demandera qui l'a rédigé.
 >
-> **En attendant votre décision**, les pages portent un bandeau « non relu par
-> un professionnel du droit ». Vos clients le voient.
+> **Tant que vous n'avez pas tranché**, la console vous le rappelle dans
+> *Réglages → Documents juridiques*. Les pages publiques, elles, ne portent
+> aucun avertissement : sur les CGU d'un artisan, un bandeau « non relu »
+> inquiète ses clients sans les informer.
 
 ✅ **Selon la réponse :**
 
-- *Faire relire* → laisse tout en l'état. Le bandeau reste, c'est son rôle :
-  il empêche qu'un document sorte sans que personne ait tranché. Rappelle qu'il
-  faudra revenir passer `revue_juridique.effectuee` à `true`.
+- *Faire relire* → laisse tout en l'état. L'avertissement reste dans la console,
+  c'est son rôle : il empêche qu'on oublie qu'aucun juriste n'a lu ces textes.
+  Rappelle qu'il faudra revenir passer `revue_juridique.effectuee` à `true`.
 - *Publier en assumant* → renseigne `revue_juridique.publication_assumee` avec
   `acceptee: true`, le **nom et la qualité** de la personne qui décide, et la
-  date du jour. Le bandeau disparaît.
+  date du jour. L'avertissement disparaît de la console.
 
-**Ne coche jamais cette case à sa place, et jamais par défaut.** Un bandeau
-d'avertissement sur les CGU d'un artisan inquiète ses clients sans les
-protéger — mais le retirer est une décision qui appartient au dirigeant, et
-elle doit être datée et nommée.
+**Ne coche jamais cette case à sa place, et jamais par défaut.** Ce qu'elle
+change tient en une ligne dans un fichier, mais elle acte que quelqu'un a su et
+a publié quand même — c'est pour ça qu'elle est datée et nommée, et c'est pour
+ça qu'elle appartient au dirigeant. Il pourra la reprendre plus tard depuis
+*Réglages → Documents juridiques*.
 
 La décision n'est pas cachée pour autant : elle reste dans la configuration, et
 l'agent la rappelle à chaque démarrage dans ses journaux. Dis-le, ça rassure —
