@@ -829,6 +829,15 @@ def _cli() -> int:
     import argparse
     import json
 
+    # Les autres modules chargent le .env à l'import ; en ligne de commande on
+    # ne passe par aucun d'eux. Sans cet appel, --connu et --verifier lisent
+    # les valeurs PAR DÉFAUT et annoncent « anthropic / 90 jours » alors que le
+    # déploiement tourne sur autre chose : l'assistant écrirait une politique
+    # de confidentialité qui contredit la configuration réelle.
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
     p = argparse.ArgumentParser(
         prog="python -m agent.juridique",
         description="Vérifie config/juridique.yaml et affiche ce que le kit sait déjà.",

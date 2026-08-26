@@ -345,3 +345,19 @@ def test_la_recherche_normalise_la_reponse(monkeypatch):
     assert r["siret"] == "12345678900012"
     assert "SARL" in r["forme_juridique"]
     assert r["representants"] == ["Alex Durand, Gérant"]
+
+
+def test_la_cli_charge_le_env(monkeypatch, tmp_path):
+    """
+    Les autres modules chargent le .env à l'import ; la ligne de commande ne
+    passe par aucun d'eux. Sans chargement explicite, --connu et --verifier
+    lisent les valeurs par défaut et annoncent « anthropic / 90 jours » alors
+    que le déploiement tourne sur autre chose. L'assistant écrirait alors une
+    politique de confidentialité qui contredit la configuration réelle.
+    """
+    import inspect
+
+    import agent.juridique as j
+
+    source = inspect.getsource(j._cli)
+    assert "load_dotenv" in source, "la CLI doit charger le .env comme le fait l'app"
