@@ -469,7 +469,7 @@ def _cli() -> int:
     import argparse
     import asyncio
     import getpass
-    import hmac as _hmac
+    import sys
 
     from dotenv import load_dotenv
 
@@ -488,13 +488,17 @@ def _cli() -> int:
         p.print_help()
         return 2
 
-    jeton = os.getenv("ADMIN_TOKEN", "").strip()
-    if not jeton:
+    # ADMIN_TOKEN doit être PRÉSENT, mais n'est plus redemandé.
+    #
+    # Le redemander était une garantie illusoire : cette commande s'exécute
+    # dans le conteneur, où « env | grep ADMIN_TOKEN » l'affiche en clair.
+    # Elle coûtait en revanche très cher — les terminaux web (Coolify, Portainer)
+    # n'exposent pas de vrai TTY, getpass y lit du vide, et la commande
+    # répondait « Jeton incorrect » quoi que l'on tape. Exactement là où on en
+    # a besoin : quelqu'un enfermé dehors, sans autre accès que ce terminal.
+    if not os.getenv("ADMIN_TOKEN", "").strip():
         print("ADMIN_TOKEN absent de l'environnement : opération refusée.")
-        return 1
-    fourni = getpass.getpass("ADMIN_TOKEN : ").strip()
-    if not _hmac.compare_digest(fourni, jeton):
-        print("Jeton incorrect.")
+        print("Cette commande s'exécute sur le serveur, où la variable est définie.")
         return 1
 
     from agent.memory import initialiser_base
@@ -517,12 +521,24 @@ def _cli() -> int:
             print("adresses ont un compte.")
             return 0
 
-        # Le mot de passe est saisi ici, jamais passé en argument : un argument
-        # reste dans l'historique du shell et dans la liste des processus.
-        nouveau = getpass.getpass("Nouveau mot de passe (12 car. minimum) : ")
-        if nouveau != getpass.getpass("Confirmez : "):
-            print("Les deux saisies diffèrent.")
+        # Deux voies, parce qu'un terminal web n'a pas de TTY et que getpass y
+        # bloque indéfiniment. La variable d'environnement permet de s'en
+        # passer ; elle reste préférable à un argument de ligne de commande,
+        # qui s'affiche dans la liste des processus de toute la machine.
+        nouveau = os.getenv("AGENTKIT_NOUVEAU_MDP", "")
+        if nouveau:
+            print("Mot de passe lu dans AGENTKIT_NOUVEAU_MDP.")
+        elif not sys.stdin.isatty():
+            print("Pas de terminal interactif : impossible de demander le mot de passe.")
+            print("Relancez en le passant par l'environnement :")
+            print("  AGENTKIT_NOUVEAU_MDP='votre-mot-de-passe' \\")
+            print(f"    python -m agent.auth --reinitialiser {a.reinitialiser}")
             return 1
+        else:
+            nouveau = getpass.getpass("Nouveau mot de passe (12 car. minimum) : ")
+            if nouveau != getpass.getpass("Confirmez : "):
+                print("Les deux saisies diffèrent.")
+                return 1
         try:
             email = await reinitialiser_mot_de_passe(a.reinitialiser, nouveau)
         except ValueError as e:

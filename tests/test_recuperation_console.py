@@ -107,10 +107,72 @@ def test_le_mot_de_passe_n_est_pas_un_argument_de_ligne_de_commande(env_propre):
     assert "--mot-de-passe" not in source and "--password" not in source
 
 
-def test_la_recuperation_exige_le_jeton_d_installation(env_propre):
-    """Sans garde-fou, la commande serait une porte dérobée."""
+def test_la_recuperation_exige_que_le_jeton_soit_defini(env_propre):
+    """
+    ADMIN_TOKEN doit être PRÉSENT dans l'environnement, sans être ressaisi.
+
+    Le ressaisir n'apportait rien — la commande tourne dans le conteneur, où
+    la variable est lisible en clair — et cassait tout usage depuis un terminal
+    web. L'exiger reste utile : sur une machine où elle n'est pas définie, on
+    n'est pas là où on croit être.
+    """
     import inspect
 
     source = inspect.getsource(_auth(env_propre)._cli)
-    assert "ADMIN_TOKEN" in source
-    assert "compare_digest" in source
+    assert 'os.getenv("ADMIN_TOKEN"' in source
+    assert "opération refusée" in source
+
+
+# ── Terminaux sans TTY (Coolify, Portainer, docker exec sans -t) ─────────
+
+
+def test_le_jeton_n_est_plus_redemande(env_propre):
+    """
+    getpass a besoin d'un vrai TTY. Les terminaux web n'en exposent pas : il y
+    lisait du vide, et la commande répondait « Jeton incorrect » quoi que l'on
+    tape — exactement là où on en a besoin, c'est-à-dire enfermé dehors sans
+    autre accès que ce terminal.
+
+    Le redemander était de toute façon illusoire : la commande s'exécute dans
+    le conteneur, où « env | grep ADMIN_TOKEN » l'affiche en clair.
+    """
+    import inspect
+
+    source = inspect.getsource(_auth(env_propre)._cli)
+    assert 'getpass.getpass("ADMIN_TOKEN' not in source
+    assert "compare_digest" not in source
+    # La variable doit rester EXIGÉE, seulement plus ressaisie.
+    assert 'os.getenv("ADMIN_TOKEN"' in source
+
+
+def test_le_mot_de_passe_peut_venir_de_l_environnement(env_propre):
+    """Seule voie possible quand le terminal n'a pas de TTY."""
+    import inspect
+
+    source = inspect.getsource(_auth(env_propre)._cli)
+    assert "AGENTKIT_NOUVEAU_MDP" in source
+
+
+def test_sans_tty_et_sans_variable_la_commande_explique(env_propre):
+    """
+    Un blocage silencieux est le pire des cas : l'utilisateur attend devant un
+    curseur sans savoir que rien ne viendra. La commande doit refuser et dire
+    comment s'y prendre.
+    """
+    import inspect
+
+    source = inspect.getsource(_auth(env_propre)._cli)
+    assert "isatty" in source
+    assert "AGENTKIT_NOUVEAU_MDP=" in source, "le message doit montrer la commande à relancer"
+
+
+def test_le_mot_de_passe_reste_hors_des_arguments(env_propre):
+    """
+    Un argument de ligne de commande s'affiche dans la liste des processus de
+    toute la machine. Une variable d'environnement est visible du seul
+    processus et de root — moins bien qu'un TTY, acceptable pour un dépannage.
+    """
+    import inspect
+
+    source = inspect.getsource(_auth(env_propre)._cli)
+    assert "--mot-de-passe" not in source and "--password" not in source
