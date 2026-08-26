@@ -335,7 +335,12 @@ def test_toute_variable_lue_par_le_code_est_transmise_au_conteneur():
         "COOLIFY_CONTAINER_NAME", "RAILWAY_PROJECT_ID", "RENDER_SERVICE_ID",
     }
 
-    oubliees = sorted(lues - passees - hebergeur)
+    # Dépannage ponctuel, jamais de la configuration : elle se passe le temps
+    # d'une commande, à la main. L'inscrire dans le compose reviendrait à
+    # proposer de stocker un mot de passe en clair chez l'hébergeur.
+    depannage = {"AGENTKIT_NOUVEAU_MDP"}
+
+    oubliees = sorted(lues - passees - hebergeur - depannage)
     assert not oubliees, (
         "variables lues par le code mais non transmises au conteneur "
         f"(elles seraient ignorées en silence une fois déployées) : {oubliees}"

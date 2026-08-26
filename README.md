@@ -168,10 +168,25 @@ python -m agent.auth --lister
 python -m agent.auth --reinitialiser vous@exemple.fr
 ```
 
-Les deux demandent l'`ADMIN_TOKEN`, celui-là même qui a servi à créer le
-premier compte. Le nouveau mot de passe est saisi à l'invite, jamais en
-argument : un argument reste dans l'historique du shell et dans la liste des
-processus, visible par tout autre utilisateur de la machine.
+`ADMIN_TOKEN` doit être défini dans l'environnement — c'est le cas sur un
+serveur correctement configuré — mais n'est pas redemandé : la commande tourne
+dans le conteneur, où la variable est de toute façon lisible.
+
+Le nouveau mot de passe est saisi à l'invite, jamais en argument : un argument
+reste dans l'historique du shell et dans la liste des processus, visible par
+tout autre utilisateur de la machine.
+
+**Dans un terminal web** (Coolify, Portainer) il n'y a pas de vrai TTY, et
+aucune invite ne peut s'afficher. Passez alors le mot de passe par
+l'environnement :
+
+```bash
+AGENTKIT_NOUVEAU_MDP='votre-mot-de-passe' \
+  python -m agent.auth --reinitialiser vous@exemple.fr
+```
+
+La commande détecte l'absence de TTY et affiche cette ligne toute faite plutôt
+que de bloquer devant un curseur qui n'attend rien.
 
 Le compte est réactivé au passage. Réinitialiser sans réactiver laisserait la
 personne dehors sans lui dire pourquoi : le mot de passe serait bon, et la
