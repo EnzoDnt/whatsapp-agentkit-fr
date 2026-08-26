@@ -153,6 +153,41 @@ c'est justement là qu'un humain doit intervenir.
 
 ---
 
+### Mot de passe de console perdu
+
+Il n'y a pas d'envoi d'e-mail de réinitialisation : l'agent n'a pas de serveur
+de courrier, et lui en donner un pour ce seul usage ajouterait un service à
+maintenir. La récupération se fait **sur le serveur**, là où la base est
+joignable.
+
+```bash
+# Lister les comptes — l'adresse doit correspondre EXACTEMENT
+python -m agent.auth --lister
+
+# Reposer un mot de passe
+python -m agent.auth --reinitialiser vous@exemple.fr
+```
+
+Les deux demandent l'`ADMIN_TOKEN`, celui-là même qui a servi à créer le
+premier compte. Le nouveau mot de passe est saisi à l'invite, jamais en
+argument : un argument reste dans l'historique du shell et dans la liste des
+processus, visible par tout autre utilisateur de la machine.
+
+Le compte est réactivé au passage. Réinitialiser sans réactiver laisserait la
+personne dehors sans lui dire pourquoi : le mot de passe serait bon, et la
+connexion refusée quand même.
+
+**Sur Docker ou Coolify**, la commande s'exécute dans le conteneur de l'agent :
+
+```bash
+docker compose exec agent python -m agent.auth --lister
+```
+
+À savoir : la console affiche le **même message** pour une adresse inconnue et
+un mot de passe faux — préciser lequel révélerait quelles adresses ont un
+compte. En cas de doute sur l'adresse, `--lister` est le seul moyen de
+trancher.
+
 ## Usernames WhatsApp (2026)
 
 Depuis juillet 2026, un client peut vous écrire **sans partager son numéro**.
