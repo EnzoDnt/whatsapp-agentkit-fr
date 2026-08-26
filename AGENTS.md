@@ -85,7 +85,7 @@ gauche.
 | Générer les secrets (verify token, sel de hachage) | `openssl rand -hex 24` |
 | Écrire le `.env` | édition de fichier |
 | Lancer le simulateur et vérifier que l'agent répond | `make simulateur` |
-| Jouer la suite de tests | `pytest` |
+| Jouer la suite de tests | `make test` — `pytest` seul n'existe pas tant que `make installer` n'a pas posé `requirements-dev.txt` |
 | Enregistrer le numéro sur la Cloud API | `POST /{phone_number_id}/register` |
 
 | 🔴 L'utilisateur doit le faire | Pourquoi tu ne peux pas |

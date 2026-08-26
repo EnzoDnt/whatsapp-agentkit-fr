@@ -1,9 +1,30 @@
 .PHONY: installer simulateur serveur test test-pg postgres verifier
 
+# Python 3.10 est le plancher réel — FastAPI 0.141 l'exige — et 3.12 est ce
+# que tourne l'image Docker. `uv` choisit seul la bonne version quand il est
+# installé. Sans lui on retombe sur le python3 du système, qui vaut 3.9 sur
+# macOS : l'environnement se créait quand même, et l'installation mourait
+# beaucoup plus loin sur « No matching distribution found for fastapi », un
+# message qui ne dit ni quelle version manque, ni où la trouver.
+PYTHON ?= python3
+
 installer:
-	uv venv --python 3.12 .venv 2>/dev/null || python3 -m venv .venv
-	.venv/bin/python -m pip install -q --upgrade pip 2>/dev/null || true
-	uv pip install --python .venv/bin/python -r requirements-dev.txt
+	@if command -v uv >/dev/null 2>&1; then \
+	  uv venv --python 3.12 .venv; \
+	else \
+	  $(PYTHON) -c 'import sys; raise SystemExit(sys.version_info < (3, 10))' || { \
+	    echo "Python 3.10 minimum (3.12 recommandé) — trouvé : $$($(PYTHON) -V 2>&1)"; \
+	    echo "Avec une autre version : make installer PYTHON=python3.12"; \
+	    exit 1; \
+	  }; \
+	  $(PYTHON) -m venv .venv; \
+	fi
+	@.venv/bin/python -m pip install -q --upgrade pip 2>/dev/null || true
+	@if command -v uv >/dev/null 2>&1; then \
+	  uv pip install --python .venv/bin/python -r requirements-dev.txt; \
+	else \
+	  .venv/bin/python -m pip install -q -r requirements-dev.txt; \
+	fi
 
 simulateur:
 	.venv/bin/uvicorn agent.main:app --port $${PORT:-8000} --reload

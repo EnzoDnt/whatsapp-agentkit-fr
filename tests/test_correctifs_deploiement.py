@@ -458,3 +458,66 @@ def test_les_faits_de_l_exemple_sont_trouvables(tmp_path, monkeypatch):
     for requete, attendu in (("deboucher WC", "149"), ("entretien chaudiere", "159")):
         premiere = tools.rechercher_information(requete).splitlines()[0]
         assert attendu in premiere, f"'{requete}' : mauvaise ligne en tête — {premiere}"
+
+
+# ── `make installer` sur un poste sans uv ────────────────────────────────
+
+
+def _recette_make(cible: str) -> list[str]:
+    """Les lignes d'une cible du Makefile, continuations recollées."""
+    from pathlib import Path
+
+    lignes = (Path(__file__).resolve().parent.parent / "Makefile").read_text()
+    dedans, brutes = False, []
+    for ligne in lignes.splitlines():
+        if ligne.startswith(f"{cible}:"):
+            dedans = True
+            continue
+        if dedans:
+            if ligne.startswith("\t"):
+                brutes.append(ligne[1:])
+            elif ligne.strip():
+                break
+    logiques, courante = [], ""
+    for brute in brutes:
+        courante += brute.rstrip("\\").strip() + " "
+        if not brute.rstrip().endswith("\\"):
+            logiques.append(courante.strip())
+            courante = ""
+    return [ligne for ligne in logiques if ligne]
+
+
+def test_l_installation_ne_depend_pas_de_uv():
+    """
+    `make installer` appelait `uv pip install` sans aucun repli. Sur un poste
+    sans uv, la toute première commande du kit s'arrêtait sur « make: uv: No
+    such file or directory » — après avoir pourtant créé l'environnement, ce
+    qui laissait croire à une installation à moitié faite plutôt qu'à un outil
+    manquant.
+
+    Le test exige un `command -v uv` explicite, et refuse donc aussi la forme
+    `uv ... 2>/dev/null || repli` qui couvrait la ligne voisine. Elle marche
+    pour un binaire absent, mais confond ce cas avec un uv présent qui échoue
+    pour une autre raison : on repart alors en silence sur le chemin de repli
+    au lieu de voir l'erreur.
+    """
+    for ligne in _recette_make("installer"):
+        if re.search(r"\buv\b", ligne.replace("command -v uv", "")):
+            assert "command -v uv" in ligne, (
+                f"uv est appelé sans repli : {ligne!r}. Sur un poste sans uv, "
+                "`make installer` échoue à la première commande du kit."
+            )
+
+
+def test_l_installation_refuse_un_python_trop_ancien():
+    """
+    Le repli `python3 -m venv` ne vérifiait pas la version. Le python3 du
+    système macOS est en 3.9 ; l'environnement se créait, puis l'installation
+    mourait bien plus loin sur « No matching distribution found for fastapi »
+    — un message qui ne nomme ni la version requise ni le moyen de l'obtenir.
+
+    FastAPI 0.141 exige 3.10. Le garde doit rester au moins aussi strict.
+    """
+    recette = " ".join(_recette_make("installer"))
+    assert "sys.version_info" in recette, "le repli ne vérifie plus la version de Python"
+    assert "(3, 10)" in recette, "le plancher 3.10 a disparu du garde"
