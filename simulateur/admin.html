@@ -353,6 +353,7 @@ th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0
     <div class="sous-onglets" role="tablist" aria-label="Sections des réglages">
       <button role="tab" data-sous="comportement" aria-selected="true">Comportement de l'agent</button>
       <button role="tab" data-sous="fichiers" aria-selected="false">Fichiers reçus</button>
+      <button role="tab" data-sous="juridique" aria-selected="false">Documents juridiques</button>
     </div>
 
     <div class="corps">
@@ -404,6 +405,11 @@ th.hors small{display:block;font-weight:400;text-transform:none;letter-spacing:0
           sa clé n'est pas renseignée. Passez le curseur dessus pour savoir pourquoi.</p>
         <div id="tab-medias"></div>
         <div id="medias-avis" style="margin-top:var(--e3)"></div>
+      </div>
+
+      <!-- Documents juridiques -->
+      <div class="panneau" id="p-juridique" hidden style="max-width:78ch">
+        <div id="jur-corps"></div>
       </div>
     </div>
   </section>
@@ -548,11 +554,116 @@ function allerSous(nom){
   $$('.sous-onglets button').forEach(b=>b.setAttribute('aria-selected',b.dataset.sous===nom));
   $('#p-comportement').hidden = nom!=='comportement';
   $('#p-fichiers').hidden = nom!=='fichiers';
+  $('#p-juridique').hidden = nom!=='juridique';
   if(nom==='fichiers')chargerMedias();
+  if(nom==='juridique')chargerJuridique();
 }
 async function chargerReglages(){
   await chargerPrompt();
   if(sousVue==='fichiers')chargerMedias();
+  if(sousVue==='juridique')chargerJuridique();
+}
+
+// ── Documents juridiques ────────────────────────────────────────────────
+// Les documents vivent sur /legal, servis par l'agent. La console ne les
+// réécrit pas : elle donne les liens, et porte la seule décision qui revient
+// à l'exploitant — afficher ou non l'avertissement « non relu par un
+// professionnel du droit » sur des pages que ses clients consultent.
+async function chargerJuridique(){
+  const d=await jget('/juridique');
+  const c=$('#jur-corps');
+
+  if(!d.configure){
+    c.innerHTML=`<div class="vide"><span class="gl">⚖️</span>
+      <div style="max-width:60ch">${esc(d.explication)}</div></div>`;
+    return;
+  }
+
+  const e=d.etat;
+  const liens=d.documents.map(x=>`
+    <li style="margin-bottom:6px">
+      <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.titre)}</a>
+      <span class="ptt dis" style="margin-left:6px">/legal/${esc(x.cle)}</span>
+    </li>`).join('');
+
+  const alertes=d.problemes.length?`
+    <div class="avis at" style="margin:var(--e3) 0">
+      <strong>${d.problemes.length} point(s) à corriger dans config/juridique.yaml :</strong>
+      <ul style="margin:6px 0 0 18px">${d.problemes.map(p=>`<li>${esc(p)}</li>`).join('')}</ul>
+    </div>`:'';
+
+  const etatTexte={
+    aucune:`<strong>Aucune décision prise.</strong> Les six pages portent l'avertissement
+      « Document non relu par un professionnel du droit ». <em>Vos clients le voient.</em>`,
+    assumee:`<strong>Publication assumée sans relecture juridique.</strong>
+      Décidé par ${esc(e.par)}${e.date?` le ${esc(e.date)}`:''}. Aucun bandeau n'est affiché.`,
+    relue:`<strong>Relu par un professionnel du droit.</strong>
+      ${esc(e.par)}${e.date?`, le ${esc(e.date)}`:''}. Aucun bandeau n'est affiché.`
+  }[e.decision];
+
+  c.innerHTML=`
+    <p class="dis pt" style="margin:0 0 var(--e3)">
+      Six documents publiés par l'agent lui-même, pour ${esc(d.entreprise)}.
+      Meta exige l'URL de la politique de confidentialité dans les paramètres de
+      votre app${d.mode==='agence'?' ; le mode agence ajoute une annexe de sous-traitance':''}.</p>
+
+    <ul style="margin:0 0 var(--e4);padding-left:18px">${liens}</ul>
+    ${alertes}
+
+    <div class="avis" style="margin-bottom:var(--e3)">${etatTexte}</div>
+
+    <label for="jur-dec">L'avertissement sur les pages publiques
+      <i class="aide" tabindex="0" role="note">i<span class="bulle">Le bandeau empêche qu'un
+        document juridique soit publié sans que personne ait tranché. Une fois la décision
+        prise, l'afficher à vos clients ne protège plus personne.</span></i></label>
+    <select id="jur-dec">
+      <option value="aucune"${e.decision==='aucune'?' selected':''}>Afficher l'avertissement (aucune décision)</option>
+      <option value="assumee"${e.decision==='assumee'?' selected':''}>Le retirer — je publie en assumant, sans relecture</option>
+      <option value="relue"${e.decision==='relue'?' selected':''}>Le retirer — un juriste a relu</option>
+    </select>
+
+    <div id="jur-qui-bloc" style="margin-top:var(--e3)"${e.decision==='aucune'?' hidden':''}>
+      <label for="jur-qui">Qui décide, ou qui a relu</label>
+      <input id="jur-qui" type="text" value="${esc(e.par)}"
+        placeholder="Marie Dupont, gérante — ou Cabinet Martin &amp; Associés">
+      <p class="ptt dis" style="margin:6px 0 0">Nommée et datée dans la configuration, et
+        rappelée à chaque démarrage dans les journaux. Retirer un avertissement juridique
+        engage : la décision n'est pas anonyme.</p>
+    </div>
+
+    <div id="jur-risque" class="avis at" style="margin-top:var(--e3)"${e.decision==='assumee'?'':' hidden'}>
+      <strong>Ce que vous acceptez.</strong> Ces textes sont des gabarits : ils n'ont pas été
+      écrits pour votre activité ni vos contrats. Une clause inexacte ou inopposable ne vous
+      protège pas, elle décore — et vous découvrirez laquelle au moment où vous en auriez eu
+      besoin. Publier un document juridique vous engage sur son contenu ; personne ne
+      demandera qui l'a rédigé.
+    </div>
+`;
+
+  $('#jur-dec').onchange=()=>{
+    const v=$('#jur-dec').value;
+    $('#jur-qui-bloc').hidden = v==='aucune';
+    $('#jur-risque').hidden = v!=='assumee';
+  };
+}
+
+async function enregistrerJuridique(){
+  const decision=$('#jur-dec').value;
+  const par=($('#jur-qui')?.value||'').trim();
+  // Le serveur refuse déjà une décision anonyme ; on le dit ici pour ne pas
+  // faire un aller-retour réseau avant de signaler un champ vide.
+  if(decision!=='aucune'&&!par){
+    alert("Indiquez qui décide : retirer un avertissement juridique engage, la décision ne peut pas être anonyme.");
+    return false;
+  }
+  const r=await api('/juridique/decision',{method:'POST',
+    body:JSON.stringify({decision,par})});
+  if(!r.ok){
+    alert('Erreur : '+((await r.json().catch(()=>({}))).detail||r.status));
+    return false;
+  }
+  await chargerJuridique();
+  return true;
 }
 
 // ── Conversations ───────────────────────────────────────────────────────
@@ -968,6 +1079,7 @@ document.addEventListener('click',async ev=>{
         const b=t;b.disabled=true;b.textContent='Enregistrement…';
         let ok=true;
         if(sousVue==='fichiers'){ok=await enregistrerMedias();}
+        else if(sousVue==='juridique'){ok=await enregistrerJuridique();}
         else{
           const r=await api('/prompts',{method:'PUT',body:JSON.stringify({
             system_prompt:$('#sys').value,fallback_message:$('#m-fb').value,

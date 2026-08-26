@@ -949,6 +949,104 @@ def _cli() -> int:
 
 
 
+
+# ── Décision de publication, depuis la console ───────────────────────────
+
+DECISIONS = ("aucune", "assumee", "relue")
+
+
+def enregistrer_decision(decision: str, par: str, date_iso: str | None = None) -> None:
+    """
+    Réécrit le SEUL bloc revue_juridique, en laissant le reste intact.
+
+    On ne repasse pas par yaml.safe_dump : il reformaterait tout le fichier et
+    perdrait les commentaires — or ce sont eux qui portent les avertissements
+    juridiques, c'est-à-dire ce qu'on veut le moins effacer en cochant une case
+    dans une interface.
+    """
+    if decision not in DECISIONS:
+        raise ErreurJuridique(f"Décision inconnue : {decision}")
+    if decision != "aucune" and not par.strip():
+        raise ErreurJuridique("Indiquez qui décide : la décision doit être nommée.")
+    if not FICHIER.exists():
+        raise ErreurJuridique("config/juridique.yaml est absent.")
+
+    quand = date_iso or date.today().isoformat()
+    qui = par.strip().replace('"', "'")
+
+    if decision == "relue":
+        neuf = (
+            "revue_juridique:\n"
+            "  effectuee: true\n"
+            f'  par: "{qui}"\n'
+            f'  date: "{quand}"\n'
+            "  publication_assumee:\n"
+            "    acceptee: false\n"
+            '    par: ""\n'
+            '    date: ""\n'
+        )
+    elif decision == "assumee":
+        neuf = (
+            "revue_juridique:\n"
+            "  effectuee: false\n"
+            '  par: ""\n'
+            '  date: ""\n'
+            "  publication_assumee:\n"
+            "    acceptee: true\n"
+            f'    par: "{qui}"\n'
+            f'    date: "{quand}"\n'
+        )
+    else:
+        neuf = (
+            "revue_juridique:\n"
+            "  effectuee: false\n"
+            '  par: ""\n'
+            '  date: ""\n'
+            "  publication_assumee:\n"
+            "    acceptee: false\n"
+            '    par: ""\n'
+            '    date: ""\n'
+        )
+
+    texte = FICHIER.read_text(encoding="utf-8")
+    lignes = texte.splitlines(keepends=True)
+    debut = next(
+        (i for i, l in enumerate(lignes) if l.startswith("revue_juridique:")), None
+    )
+    if debut is None:
+        FICHIER.write_text(texte.rstrip("\n") + "\n\n" + neuf, encoding="utf-8")
+        return
+
+    # Le bloc court jusqu'à la prochaine clé de premier niveau, commentaires
+    # intermédiaires compris : les laisser derrière produirait un fichier
+    # commenté pour un réglage qui n'y est plus.
+    fin = len(lignes)
+    for i in range(debut + 1, len(lignes)):
+        l = lignes[i]
+        if l.strip() and not l[0].isspace() and not l.lstrip().startswith("#"):
+            fin = i
+            break
+    FICHIER.write_text(
+        "".join(lignes[:debut]) + neuf + "".join(lignes[fin:]), encoding="utf-8"
+    )
+
+
+def etat_publication(conf: dict) -> dict:
+    """Ce que la console affiche : l'état, et ce qu'il implique."""
+    revue = conf.get("revue_juridique") or {}
+    assume = revue.get("publication_assumee") or {}
+    if revue.get("effectuee"):
+        return {
+            "decision": "relue", "par": revue.get("par") or "",
+            "date": revue.get("date") or "", "bandeau": False,
+        }
+    if assume.get("acceptee"):
+        return {
+            "decision": "assumee", "par": assume.get("par") or "",
+            "date": assume.get("date") or "", "bandeau": False,
+        }
+    return {"decision": "aucune", "par": "", "date": "", "bandeau": True}
+
 # ── Recherche d'entreprise (France) ──────────────────────────────────────
 #
 # Raison sociale, SIREN, forme juridique, adresse et dirigeants sont des
