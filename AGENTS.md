@@ -285,19 +285,101 @@ lui-même sur `/legal` : rien à héberger ailleurs.
 
 `python -m agent.juridique --connu` t'affiche ce dernier bloc en JSON.
 
-**Ce que tu demandes — quatre questions, pas vingt-cinq**
+**Cherche avant de demander — France**
 
-Une à la fois, comme à l'étape 2. Ce sont les seules choses qu'aucune API ne
-donne et qu'aucun fichier ne contient :
+Raison sociale, SIREN, forme juridique, adresse et dirigeants sont **publics**.
+Faire taper un SIRET de mémoire, c'est se garantir un numéro faux dans des
+mentions légales : une erreur qu'aucun test ne rattrape et qui ne se voit qu'en
+contrôle.
 
-1. La **raison sociale exacte** et la forme juridique (« SARL au capital de… »)
-2. Le **numéro d'immatriculation** (SIREN/SIRET, RCS, ou l'équivalent local)
-3. Le **représentant légal** — nom et qualité
-4. L'**adresse e-mail** qui recevra les demandes RGPD (souvent la même que le
-   contact général ; propose-la et laisse confirmer)
+```bash
+python -m agent.juridique --chercher "nom de l'entreprise"
+```
 
-Si la personne a un **DPO désigné**, demande-le en cinquième. La plupart des
-PME n'en ont pas, et ce n'est pas obligatoire : ne laisse pas croire l'inverse.
+Tu obtiens tout le bloc `entreprise` d'un coup. Tu ne demandes plus qu'à
+**confirmer**, ce qui est autrement plus fiable que de faire dicter.
+
+Hors de France, ou si l'annuaire ne trouve rien, pose les questions ci-dessous.
+
+**Les questions — une seule à la fois, et attends la réponse**
+
+Emploie les mots du dirigeant, pas ceux du juriste. Personne ne dit « ma
+dénomination sociale » : on dit « le nom de ma boîte ».
+
+---
+
+**Q1 — Identifier l'entreprise**
+
+> **Comment s'appelle exactement l'entreprise ?**
+> Le nom qui figure sur vos factures, pas l'enseigne commerciale si elle diffère.
+> Si vous avez le numéro SIRET sous la main, il ira encore plus vite.
+
+✅ Lance `--chercher` avec la réponse. Puis présente ce que tu trouves :
+
+> Je trouve **{raison_sociale}**, {forme_juridique}, SIREN {siren}, au
+> {adresse}, avec {representant} comme représentant.
+> **C'est bien ça ?**
+
+Si plusieurs résultats, montre-les numérotés et fais choisir. Si l'annuaire
+indique un établissement fermé, signale-le : c'est souvent un déménagement mal
+répercuté, parfois une erreur de saisie de ta part.
+
+---
+
+**Q2 — Le représentant légal** *(si l'annuaire ne l'a pas donné, ou pour confirmer)*
+
+> **Qui représente légalement l'entreprise ?**
+> Le nom et la fonction — « Marie Dupont, gérante » ou « Paul Martin, président ».
+> C'est la personne qui engage l'entreprise, pas forcément vous.
+
+⚠️ Fais toujours confirmer, même si l'annuaire l'a donné : les changements de
+dirigeant y arrivent avec du retard.
+
+---
+
+**Q3 — L'adresse des demandes RGPD**
+
+> **À quelle adresse e-mail un client doit-il écrire s'il veut consulter ou
+> faire effacer ses données ?**
+> Ça peut être votre adresse de contact habituelle, {email_deja_connu} — c'est
+> le cas le plus courant. Une boîte dédiée n'a de sens que si quelqu'un la
+> relève vraiment.
+
+✅ Propose l'e-mail déjà collecté à l'étape 2 et laisse confirmer d'un mot.
+Ne fais pas retaper ce que tu connais.
+
+---
+
+**Q4 — Le délégué à la protection des données**
+
+> **Avez-vous désigné un DPO — un délégué à la protection des données ?**
+> C'est une personne officiellement chargée du sujet, déclarée à la CNIL.
+> **La plupart des PME n'en ont pas, et ce n'est pas obligatoire** : il ne l'est
+> que pour les organismes publics, la surveillance à grande échelle, ou le
+> traitement massif de données sensibles. Un agent WhatsApp de PME n'entre dans
+> aucun de ces cas.
+
+✅ Un « non » est la réponse normale : `dpo_designe: false`, et c'est le
+représentant légal qui devient le contact. N'insiste pas, et surtout ne laisse
+pas croire qu'il en faudrait un.
+
+---
+
+**Q5 — Pour qui tu installes** *(souvent déductible ; confirme en une phrase)*
+
+> **Cet agent, c'est pour votre propre entreprise, ou vous l'installez pour un
+> client ?**
+
+`direct` dans le premier cas. `agence` dans le second : le client reste
+responsable de traitement, tu deviens sous-traitant, et une annexe de
+sous-traitance (art. 28 RGPD) est générée en plus.
+
+---
+
+**Reformule avant d'écrire.** Comme à l'étape 2 : récapitule ce que tu as
+compris en trois lignes, fais valider, puis écris le fichier. Une raison
+sociale mal orthographiée dans des mentions légales se corrige mal une fois
+les URL déposées chez Meta.
 
 **Le mode**
 

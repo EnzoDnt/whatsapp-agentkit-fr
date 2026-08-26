@@ -837,7 +837,29 @@ def _cli() -> int:
     p.add_argument("--connu", action="store_true",
                    help="affiche ce que le kit déduit seul (JSON), pour l'assistant")
     p.add_argument("--pays", help="code pays : rappelle l'autorité de contrôle")
+    p.add_argument("--chercher", metavar="NOM",
+                   help="cherche une entreprise française (nom, SIREN ou SIRET) "
+                        "dans l'annuaire public, pour faire CONFIRMER plutôt que saisir")
     a = p.parse_args()
+
+    if a.chercher:
+        trouves = chercher_entreprise(a.chercher)
+        if not trouves:
+            print("Aucun résultat — ou annuaire indisponible.")
+            print("Posez les questions directement (AGENTS.md, étape 2 ter).")
+            return 1
+        for i, e in enumerate(trouves, 1):
+            ferme = "  ⚠️ ÉTABLISSEMENT FERMÉ" if e["etat"] and e["etat"] != "A" else ""
+            print(f"\n[{i}] {e['raison_sociale']}{ferme}")
+            print(f"    forme_juridique   : {e['forme_juridique']}")
+            print(f"    immatriculation   : SIREN {e['siren']} — SIRET {e['siret']}")
+            print(f"    adresse           : {e['adresse']}")
+            for r in e["representants"]:
+                print(f"    representant      : {r}")
+        print("\nCes données sont publiques et parfois en retard sur la réalité.")
+        print("FAITES CONFIRMER la ligne retenue avant de l'écrire — surtout le")
+        print("représentant légal, qui change sans que l'annuaire suive toujours.")
+        return 0
 
     if a.pays:
         code = a.pays.strip().upper()
@@ -882,6 +904,84 @@ def _cli() -> int:
         print(f"  - {x}")
     return 1
 
+
+
+# ── Recherche d'entreprise (France) ──────────────────────────────────────
+#
+# Raison sociale, SIREN, forme juridique, adresse et dirigeants sont des
+# données PUBLIQUES en France. Les faire saisir de mémoire, c'est se garantir
+# un SIRET faux dans des mentions légales — une erreur qu'aucun test ne
+# rattrape et qui ne se voit qu'en contrôle.
+#
+# Outil d'INSTALLATION, jamais appelé par l'agent en service : le runtime ne
+# gagne aucune dépendance réseau.
+
+RECHERCHE_API = "https://recherche-entreprises.api.gouv.fr/search"
+
+# Catégories juridiques INSEE les plus courantes. Un code absent est restitué
+# tel quel avec une mention « à confirmer » : mieux vaut avouer qu'on ne sait
+# pas que d'écrire « SARL » sur une SAS.
+FORMES_INSEE = {
+    "1000": "Entrepreneur individuel",
+    "5202": "Société en nom collectif (SNC)",
+    "5498": "SARL à associé unique (EURL)",
+    "5499": "Société à responsabilité limitée (SARL)",
+    "5599": "Société anonyme à conseil d'administration (SA)",
+    "5699": "Société anonyme à directoire (SA)",
+    "5710": "Société par actions simplifiée (SAS)",
+    "5720": "Société par actions simplifiée à associé unique (SASU)",
+    "6540": "Société civile immobilière (SCI)",
+    "9220": "Association déclarée",
+}
+
+
+def forme_juridique(code: str | None) -> str:
+    code = str(code or "").strip()
+    if not code:
+        return ""
+    return FORMES_INSEE.get(code, f"catégorie juridique INSEE {code} — à confirmer")
+
+
+def chercher_entreprise(requete: str, limite: int = 5) -> list[dict]:
+    """
+    Interroge l'annuaire public des entreprises (data.gouv.fr, sans clé).
+
+    Ne lève jamais : une recherche indisponible ne doit pas bloquer une
+    installation. L'assistant retombe alors sur les questions directes.
+    """
+    import json
+    import urllib.parse
+    import urllib.request
+
+    url = f"{RECHERCHE_API}?" + urllib.parse.urlencode(
+        {"q": requete, "per_page": max(1, min(limite, 10))}
+    )
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            donnees = json.load(r)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Recherche d'entreprise indisponible ({e}) ; posez les questions.")
+        return []
+
+    resultats = []
+    for item in donnees.get("results", []):
+        siege = item.get("siege") or {}
+        dirigeants = [
+            f"{(d.get('prenoms') or '').title()} {(d.get('nom') or '').title()}".strip()
+            + (f", {d.get('qualite')}" if d.get("qualite") else "")
+            for d in (item.get("dirigeants") or [])
+            if d.get("nom")
+        ]
+        resultats.append({
+            "raison_sociale": item.get("nom_complet") or "",
+            "siren": item.get("siren") or "",
+            "siret": siege.get("siret") or "",
+            "forme_juridique": forme_juridique(item.get("nature_juridique")),
+            "adresse": (siege.get("adresse") or "").strip(),
+            "representants": dirigeants,
+            "etat": item.get("etat_administratif") or "",
+        })
+    return resultats
 
 if __name__ == "__main__":
     raise SystemExit(_cli())

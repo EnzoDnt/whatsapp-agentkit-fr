@@ -289,3 +289,59 @@ def test_une_duree_de_conservation_dupliquee_est_refusee():
     c = _conf_valide()
     c["traitement"] = {"conservation_jours": 30}
     assert any("conservation_jours" in p for p in verifier(c))
+
+
+# ── Recherche d'entreprise ───────────────────────────────────────────────
+
+
+def test_les_formes_juridiques_courantes_sont_traduites():
+    """
+    Écrire « SARL » sur une SAS est une erreur de mentions légales. Un code
+    inconnu doit s'avouer, pas se deviner.
+    """
+    from agent.juridique import forme_juridique
+
+    assert "SAS" in forme_juridique("5710")
+    assert "SARL" in forme_juridique("5499")
+    assert forme_juridique("") == ""
+    inconnu = forme_juridique("9999")
+    assert "9999" in inconnu and "confirmer" in inconnu
+
+
+def test_la_recherche_ne_leve_jamais(monkeypatch):
+    """Un annuaire indisponible ne doit pas interrompre une installation."""
+    import agent.juridique as j
+
+    def explose(*a, **k):
+        raise OSError("réseau coupé")
+
+    monkeypatch.setattr("urllib.request.urlopen", explose)
+    assert j.chercher_entreprise("peu importe") == []
+
+
+def test_la_recherche_normalise_la_reponse(monkeypatch):
+    """Le format de l'annuaire ne doit pas fuir dans le reste du kit."""
+    import io
+    import json
+
+    import agent.juridique as j
+
+    charge = {
+        "results": [{
+            "nom_complet": "PLOMBERIE DURAND",
+            "siren": "123456789",
+            "nature_juridique": "5499",
+            "etat_administratif": "A",
+            "siege": {"siret": "12345678900012", "adresse": "3 RUE DES LILAS 93100 MONTREUIL"},
+            "dirigeants": [{"nom": "DURAND", "prenoms": "ALEX", "qualite": "Gérant"}],
+        }]
+    }
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda *a, **k: io.BytesIO(json.dumps(charge).encode()),
+    )
+    r = j.chercher_entreprise("Plomberie Durand")[0]
+    assert r["raison_sociale"] == "PLOMBERIE DURAND"
+    assert r["siret"] == "12345678900012"
+    assert "SARL" in r["forme_juridique"]
+    assert r["representants"] == ["Alex Durand, Gérant"]
