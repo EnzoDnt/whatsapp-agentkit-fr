@@ -327,17 +327,23 @@ lisent tels quels.
 
 ## Commandes
 
+**Prérequis : Python 3.10 minimum**, 3.12 recommandé — c'est la version de
+l'image Docker. Si [uv](https://docs.astral.sh/uv/) est installé, `make
+installer` choisit 3.12 tout seul ; sinon il prend le `python3` du système, et
+refuse de continuer s'il est trop ancien (celui de macOS est en 3.9). Pour lui
+en désigner un autre : `make installer PYTHON=python3.12`.
+
 ```bash
-make installer    # environnement + dépendances
+make installer    # environnement + dépendances (dont les outils de test)
 make simulateur   # http://localhost:8000/simulateur
-make test         # les 176 tests
+make test         # les 319 tests
 make test-pg      # tests sur un vrai PostgreSQL (démarre un conteneur)
 make serveur      # production
 ```
 
 ## Ce qui est vérifié
 
-176 tests automatisés, en quatre couches :
+319 tests automatisés, en quatre couches :
 
 | Couche | Ce qu'elle couvre |
 |---|---|
