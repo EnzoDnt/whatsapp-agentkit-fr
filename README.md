@@ -38,7 +38,7 @@ Une distinction à avoir en tête dès le départ :
 
 Tant que vous testez, un seul dépôt suffit : celui-ci. Le second n'arrive qu'au
 moment de mettre l'agent en ligne, et **votre agent le crée pour vous** — voir
-[`HEBERGEMENT.md`](HEBERGEMENT.md).
+[`docs/HEBERGEMENT.md`](docs/HEBERGEMENT.md).
 
 ## Le principe
 
@@ -119,7 +119,7 @@ Et si un type n'est pas configuré — ou si la conversion échoue — l'agent
 **n'improvise pas** : il met la conversation en pause et la passe à un humain,
 avec le fichier consultable dans le back-office. Le filet plutôt que le silence.
 
-Détails, limites et coûts : **[SPEC-MEDIAS.md](SPEC-MEDIAS.md)**.
+Détails, limites et coûts : **[docs/SPEC-MEDIAS.md](docs/SPEC-MEDIAS.md)**.
 
 ---
 
@@ -232,7 +232,7 @@ clients**. Le kit ingère les deux.
 réserve après, et ne masque pas le numéro de l'entreprise. Pour ouvrir un compte
 WhatsApp Business API, un numéro **dédié** reste obligatoire — jamais celui du
 client. Comment le choisir et où le prendre à bas coût (VoIP OVHcloud ou SIM) :
-**[`SETUP-NUMERO.md`](SETUP-NUMERO.md)**. C'est l'étape la plus longue de la mise
+**[`docs/SETUP-NUMERO.md`](docs/SETUP-NUMERO.md)**. C'est l'étape la plus longue de la mise
 en production, à lancer tôt.
 
 ---
@@ -315,7 +315,7 @@ photo envoyée en boucle ne peut pas vider votre compte pendant la nuit.
 Tant que l'agent tourne sur votre ordinateur, il s'arrête quand vous le fermez.
 Pour qu'il réponde le dimanche à 22 h, il lui faut un serveur.
 
-Deux voies, décrites dans [`HEBERGEMENT.md`](HEBERGEMENT.md) :
+Deux voies, décrites dans [`docs/HEBERGEMENT.md`](docs/HEBERGEMENT.md) :
 
 - **Railway** — vous connectez votre dépôt, ça se déploie seul. ~5 $/mois. La voie
   rapide pour un premier agent.

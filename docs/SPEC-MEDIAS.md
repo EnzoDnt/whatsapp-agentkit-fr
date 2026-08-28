@@ -259,7 +259,7 @@ Dans cet ordre, chaque étape testable seule.
 | 5 | `agent/main.py` | Branchement dans `traiter_message` : conversion avant `generer_reponse`, escalade sinon |
 | 6 | `agent/environnement.py` | Alerte de configuration incohérente |
 | 7 | `Dockerfile`, `requirements.txt` | `ffmpeg`, `pypdf` |
-| 8 | `.env.example`, `README.md`, `AGENTS.md` | Documentation et matrice de compatibilité |
+| 8 | `.env.example`, `../README.md`, `../AGENTS.md` | Documentation et matrice de compatibilité |
 
 Rien de tout cela ne touche `brain.py`, `llm.py`, `memory.py` ni `admin.py`.
 

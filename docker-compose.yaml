@@ -96,7 +96,7 @@ services:
       # le contenu du PREMIER déploiement est alors figé, et les fichiers
       # poussés ensuite dans Git n'atteignent plus jamais le conteneur. On
       # redéploie, rien ne change, et aucune erreur n'apparaît nulle part.
-      # Voir HEBERGEMENT.md § 4 pour le diagnostic et les deux issues.
+      # Voir docs/HEBERGEMENT.md § 4 pour le diagnostic et les deux issues.
       - ./knowledge:/app/knowledge
       - ./config:/app/config
 

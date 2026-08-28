@@ -72,7 +72,7 @@ gauche.
 | Tester le webhook | MCP `devtools_webhook_test` |
 | Consulter la doc Meta à jour | MCP `devtools_discovery` (aucune permission requise) |
 | Installer Python, créer le venv, installer les dépendances | `uv` / `python3` |
-| Se procurer le numéro dédié WhatsApp (VoIP OVHcloud ou SIM) | 🔴 manuel — voir `SETUP-NUMERO.md` |
+| Se procurer le numéro dédié WhatsApp (VoIP OVHcloud ou SIM) | 🔴 manuel — voir `docs/SETUP-NUMERO.md` |
 | Régler quel service lit quel type de fichier | ✅ console → Fichiers reçus |
 | Poser le logo du client et écrire `config/marque.yaml` | édition de fichier |
 | Créer le dépôt privé de déploiement et le pousser | `gh repo create --private` |
@@ -223,13 +223,13 @@ dans `knowledge/` — tu les liras.
 
 ### Étape 3 — Brancher WhatsApp pour de vrai
 
-**Suis `SETUP-META.md`** : chaque étape y est décrite avec sa vérification.
+**Suis `docs/SETUP-META.md`** : chaque étape y est décrite avec sa vérification.
 
 > ⚠️ **À dire AVANT de commencer, pas quand tu es bloqué.** Passer en vrai sur
 > WhatsApp demande un **numéro de téléphone dédié** — jamais le numéro personnel
 > du client. Se le procurer et le faire valider par Meta prend un délai que tu ne
 > maîtrises pas. Annonce-le dès le départ et renvoie l'utilisateur à
-> **`SETUP-NUMERO.md`** (recommandation : une ligne VoIP OVHcloud à ~0,99 €/mois HT
+> **`docs/SETUP-NUMERO.md`** (recommandation : une ligne VoIP OVHcloud à ~0,99 €/mois HT
 > avec un softphone, ou une SIM bas coût type Free ; un +33 de préférence).
 > Pendant ce temps, montre l'agent avec le simulateur — rien n'oblige à attendre
 > le numéro pour valider le comportement.
@@ -265,7 +265,7 @@ la barre latérale.
 ### Étape 2 ter — Les documents juridiques
 
 **C'est toi qui les produis.** Ne renvoie pas la personne vers un générateur en
-ligne ni vers `JURIDIQUE.md` : ce fichier est ta référence, pas ses devoirs.
+ligne ni vers `docs/JURIDIQUE.md` : ce fichier est ta référence, pas ses devoirs.
 
 Meta **exige** une URL de politique de confidentialité dans les paramètres de
 l'app — sans elle, pas d'App Review ni de passage en Live. Le RGPD impose les
@@ -474,7 +474,7 @@ génère `ADMIN_TOKEN` (`openssl rand -hex 24`), ajoute-le au `.env`, et indique
 
 ### Étape 4 — Mise en ligne (seulement si demandé)
 
-**Suis `HEBERGEMENT.md`.** Il couvre l'explication à donner à l'utilisateur, la
+**Suis `docs/HEBERGEMENT.md`.** Il couvre l'explication à donner à l'utilisateur, la
 création de son dépôt privé, le choix de l'hébergeur et les vérifications d'après
 déploiement.
 

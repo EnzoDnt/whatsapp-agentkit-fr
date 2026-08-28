@@ -34,7 +34,7 @@ les documents suivent la configuration.
 > **Ce fichier est la référence de l'assistant d'installation, pas votre marche
 > à suivre.** C'est lui qui mène l'entretien juridique, remplit
 > `config/juridique.yaml`, vérifie son travail et pose les URL dans Meta — voir
-> `AGENTS.md`, étape 2 ter. Vous n'intervenez que sur deux points : les quatre
+> `../AGENTS.md`, étape 2 ter. Vous n'intervenez que sur deux points : les quatre
 > informations que nul ne peut deviner (raison sociale, immatriculation,
 > représentant légal, e-mail RGPD), et **la relecture par un juriste**.
 >
@@ -250,7 +250,7 @@ revue_juridique:
     date: "2026-08-24"
 ```
 
-L'assistant d'installation pose la question (`AGENTS.md`, Q6). Il a consigne de
+L'assistant d'installation pose la question (`../AGENTS.md`, Q6). Il a consigne de
 ne jamais cocher cette case à votre place : retirer l'avertissement est une
 décision de dirigeant, pas un réglage technique. Vous pouvez la reprendre à
 tout moment depuis la console, dans **Réglages → Documents juridiques**, qui

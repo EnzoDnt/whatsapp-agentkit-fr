@@ -25,6 +25,7 @@ Makefile
 
 # Documentation : n'a rien à faire dans l'image
 *.md
+docs/
 !knowledge/*.md
 # Les gabarits juridiques SI : ce sont des données du programme, pas de la
 # documentation. Sans eux l'agent démarre puis échoue à générer ses documents
