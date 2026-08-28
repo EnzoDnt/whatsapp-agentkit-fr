@@ -170,6 +170,11 @@ def test_l_exemple_livre_porte_l_avertissement_de_revue():
     )
 
 
+@pytest.mark.skipif(
+    not (RACINE / "Makefile").is_file(),
+    reason="dépôt de déploiement : son .gitignore est volontairement l'inverse "
+           "de celui du kit — la configuration du client DOIT y être versionnée",
+)
 def test_la_configuration_juridique_est_exclue_du_depot():
     """
     Elle porte la raison sociale, l'immatriculation, l'adresse et les contacts

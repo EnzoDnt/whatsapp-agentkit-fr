@@ -7,9 +7,22 @@ lien avec l'incident reste lisible.
 """
 
 import os
+import pathlib
 import re
 
 import pytest
+
+# Cette suite vérifie l'EMBALLAGE du kit : le Makefile, le .env.example, les
+# exemples métier, les gabarits de prompt. Le dépôt de déploiement d'un client
+# reçoit le même code mais pas ces fichiers — il n'a rien à distribuer. Sans ce
+# saut, dix tests y échoueraient en permanence et on finirait par ne plus lire
+# la sortie de la suite, ce qui coûte bien plus cher que ce qu'ils vérifient.
+_RACINE = pathlib.Path(__file__).resolve().parent.parent
+pytestmark = pytest.mark.skipif(
+    not (_RACINE / "Makefile").is_file() or not (_RACINE / ".env.example").is_file(),
+    reason="dépôt de déploiement : le kit n'y est pas emballé, ces vérifications "
+           "ne s'appliquent pas",
+)
 
 
 # ── .env.example vide et simulateur ──────────────────────────────────────
