@@ -479,10 +479,15 @@ class TestNonRegression:
         assert poster(client, charge).json()["empiles"] == 1
         assert poster(client, charge).json()["empiles"] == 0
 
-    def test_la_depense_media_compte_dans_le_plafond(self, medias):
+    @pytest.mark.asyncio
+    async def test_la_depense_media_compte_dans_le_plafond(self, medias):
         """
         Sans cette imputation, le coupe-circuit ne protège plus rien : quelqu'un
         qui envoie des vidéos en boucle contournerait PLAFOND_DEPENSE_JOUR.
+
+        `_compter` est asynchrone depuis que le cumul est aussi écrit en base :
+        le plafond doit survivre à un redéploiement, pas seulement au message
+        suivant.
         """
         depenses = sys.modules["agent.securite"].depenses
         avant = depenses.depense_du_jour
@@ -492,7 +497,7 @@ class TestNonRegression:
                 input_tokens = 100_000
                 output_tokens = 1_000
 
-        medias._compter(FausseReponse(), "claude-sonnet-5")
+        await medias._compter(FausseReponse(), "claude-sonnet-5")
         assert depenses.depense_du_jour > avant
 
 

@@ -1,12 +1,23 @@
-fastapi>=0.141.0
-uvicorn[standard]>=0.52.0
+# Dépendances de l'agent.
+#
+# Chaque ligne porte une borne BASSE et une borne HAUTE. La basse dit ce dont
+# le code a besoin ; la haute empêche qu'une version majeure publiée dans six
+# mois casse l'installation de quelqu'un qui clone ce dépôt — le cas typique
+# d'un kit public, installé longtemps après avoir été écrit, par une personne
+# qui n'a aucun moyen de diagnostiquer la panne.
+#
+# Pour relever un plafond : montez la borne, lancez `make test`, et ne le
+# faites que si la suite passe.
+
+fastapi>=0.141.0,<1.0.0
+uvicorn[standard]>=0.52.0,<1.0.0
 anthropic>=1.0.0,<2.0.0
-httpx>=0.28.0
-python-dotenv>=1.2.0
-sqlalchemy[asyncio]>=2.0.52
-pyyaml>=6.0.3
-aiosqlite>=0.22.0
-asyncpg>=0.31.0
+httpx>=0.28.0,<1.0.0
+python-dotenv>=1.2.0,<2.0.0
+sqlalchemy[asyncio]>=2.0.52,<3.0.0
+pyyaml>=6.0.3,<7.0.0
+aiosqlite>=0.22.0,<1.0.0
+asyncpg>=0.31.0,<1.0.0
 # SDK OpenAI : sert aussi à OpenRouter et Google (Gemini), qui exposent
 # la même API. Inclus d'office pour que changer de fournisseur ne soit
 # qu'une variable à modifier — sinon le déploiement Docker casserait,
@@ -15,4 +26,4 @@ asyncpg>=0.31.0
 openai>=2.0.0,<4.0.0
 # Extraction du texte des PDF reçus. Si le PDF est un scan (aucun texte),
 # le relais est pris par le modèle de vision, qui fait l'OCR.
-pypdf>=6.0.0
+pypdf>=6.0.0,<7.0.0

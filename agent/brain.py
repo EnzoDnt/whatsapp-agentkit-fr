@@ -12,7 +12,7 @@ import yaml
 from dotenv import load_dotenv
 
 from agent.llm import ErreurLLM, modele_par_defaut, obtenir_client
-from agent.securite import depenses, masquer_telephone
+from agent.securite import depenses, masquer_telephone, sauvegarder_depense
 from agent.tools import executer_outil, outil_accepte, schemas_outils
 
 load_dotenv()
@@ -272,6 +272,9 @@ async def generer_reponse(
         return message_erreur(), False
 
     cout = depenses.enregistrer(MODELE, bilan.tokens_entree, bilan.tokens_sortie)
+    # Écrit en base tout de suite : sinon le cumul repart de zéro au prochain
+    # redéploiement et le plafond journalier ne veut plus rien dire.
+    await sauvegarder_depense()
     logger.info(
         f"{FOURNISSEUR}/{MODELE} — {bilan.tokens_entree} entrée / {bilan.tokens_sortie} sortie "
         f"en {bilan.tours} tour(s) (~{cout:.4f} $, cumul du jour {depenses.depense_du_jour} $)"

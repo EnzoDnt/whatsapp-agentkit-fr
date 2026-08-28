@@ -168,18 +168,36 @@ class LimiteurDebit:
 @dataclass
 class CompteurDepense:
     """
-    Estime la dépense Claude du jour et coupe au-delà du plafond.
+    Estime la dépense de modèle du jour et coupe au-delà du plafond.
 
-    C'est une estimation locale, pas la facturation réelle d'Anthropic : elle
-    sert de coupe-circuit, pas de comptabilité. Mise à zéro au redémarrage.
+    C'est une estimation locale, pas la facturation réelle du fournisseur :
+    elle sert de coupe-circuit, pas de comptabilité.
+
+    Le cumul vit en mémoire pour que `depassement()` réponde sans aller en base
+    à chaque message, mais il est **écrit en base après chaque dépense et relu
+    au démarrage**. Sans cette persistance, le plafond n'était pas « par jour »
+    mais « par période de fonctionnement » : chaque redéploiement — et il y en
+    a un à chaque `git push` — le remettait à zéro. Un plafond qu'un
+    redémarrage annule ne protège de rien.
     """
 
     plafond_journalier: float = float(os.getenv("PLAFOND_DEPENSE_JOUR", "5") or "5")
     _depense: float = 0.0
     _jour: str = ""
 
+    @property
+    def jour_courant(self) -> str:
+        """La journée à laquelle le cumul se rapporte, au format AAAA-MM-JJ."""
+        return time.strftime("%Y-%m-%d")
+
+    def restaurer(self, jour: str, montant: float) -> None:
+        """Repart du cumul lu en base. Ignoré si la ligne date d'hier."""
+        if jour == self.jour_courant:
+            self._jour = jour
+            self._depense = float(montant)
+
     def _verifier_jour(self) -> None:
-        aujourdhui = time.strftime("%Y-%m-%d")
+        aujourdhui = self.jour_courant
         if aujourdhui != self._jour:
             self._jour = aujourdhui
             self._depense = 0.0
@@ -207,3 +225,37 @@ class CompteurDepense:
 
 limiteur = LimiteurDebit()
 depenses = CompteurDepense()
+
+
+# ── Persistance du plafond ───────────────────────────────────────────────
+#
+# L'import de `memory` est fait DANS les fonctions, pas en tête de module :
+# `memory` importe déjà `securite`, et l'inverse au niveau du module créerait
+# un cycle d'imports qui casserait le démarrage.
+
+
+async def restaurer_depense() -> float:
+    """Relit le cumul du jour en base. À appeler une fois, au démarrage."""
+    from agent.memory import lire_depense_jour
+
+    jour = depenses.jour_courant
+    montant = await lire_depense_jour(jour)
+    depenses.restaurer(jour, montant)
+    return montant
+
+
+async def sauvegarder_depense() -> None:
+    """
+    Écrit le cumul du jour en base, après chaque dépense.
+
+    Une écriture par message : négligeable à côté de l'appel au modèle qui
+    vient de l'occasionner, et c'est ce qui fait tenir le plafond au
+    redémarrage suivant. Un échec d'écriture ne doit jamais faire échouer la
+    réponse au client — le pire cas est de reperdre le cumul du jour.
+    """
+    from agent.memory import ecrire_depense_jour
+
+    try:
+        await ecrire_depense_jour(depenses.jour_courant, depenses.depense_du_jour)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Cumul de dépense non sauvegardé : {e}")

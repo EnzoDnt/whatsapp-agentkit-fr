@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     Integer,
     LargeBinary,
     String,
@@ -340,6 +341,64 @@ async def basculer_pause_conversation(identifiant: str, en_pause: bool) -> bool:
             )
             await session.commit()
     return en_pause
+
+
+class DepenseJour(Base):
+    """
+    Cumul des dépenses de modèle pour une journée.
+
+    Le compteur vit en mémoire pour que le coupe-circuit réponde sans aller en
+    base à chaque message ; cette table est sa mémoire longue. Sans elle, le
+    plafond ne serait pas « par jour » mais « par période de fonctionnement » :
+    chaque redéploiement — et il y en a un à chaque `git push` — le remettait à
+    zéro. Un plafond qu'un redémarrage annule ne protège de rien.
+
+    Un seul processus écrit cette ligne, donc la dernière écriture fait foi.
+    Avec plusieurs répliques il faudrait un incrément atomique côté base.
+    """
+
+    __tablename__ = "depenses_jour"
+
+    jour: Mapped[str] = mapped_column(String(10), primary_key=True)  # AAAA-MM-JJ
+    montant: Mapped[float] = mapped_column(Float, default=0.0)
+    maj_le: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+async def lire_depense_jour(jour: str) -> float:
+    """Cumul déjà dépensé aujourd'hui, 0.0 si la journée commence."""
+    async with Session() as session:
+        r = await session.execute(select(DepenseJour).where(DepenseJour.jour == jour))
+        ligne = r.scalar_one_or_none()
+        return float(ligne.montant) if ligne else 0.0
+
+
+async def ecrire_depense_jour(jour: str, montant: float) -> None:
+    """Écrit le cumul du jour. Crée la ligne au premier appel de la journée."""
+    async with Session() as session:
+        r = await session.execute(select(DepenseJour).where(DepenseJour.jour == jour))
+        ligne = r.scalar_one_or_none()
+        if ligne is None:
+            session.add(DepenseJour(jour=jour, montant=montant))
+        else:
+            ligne.montant = montant
+            ligne.maj_le = datetime.now(timezone.utc)
+        try:
+            await session.commit()
+        except IntegrityError:
+            # Deux tâches de fond ont créé la ligne au même instant : la
+            # première a gagné, la nôtre sera écrasée au message suivant.
+            await session.rollback()
+
+
+async def purger_depenses_anciennes(jours: int = 90) -> int:
+    """Une ligne par jour, mais autant ne pas les garder indéfiniment."""
+    limite = (datetime.now(timezone.utc) - timedelta(days=jours)).strftime("%Y-%m-%d")
+    async with Session() as session:
+        r = await session.execute(delete(DepenseJour).where(DepenseJour.jour < limite))
+        await session.commit()
+        return r.rowcount or 0
 
 
 async def enregistrer_escalade(

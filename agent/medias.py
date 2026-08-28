@@ -32,7 +32,7 @@ from pathlib import Path
 import httpx
 import yaml
 
-from agent.securite import depenses
+from agent.securite import depenses, sauvegarder_depense
 
 logger = logging.getLogger("agentkit")
 
@@ -487,7 +487,7 @@ async def _transcrire(octets: bytes, fournisseur: str, modele: str) -> str:
         # sous le plafond quotidien précisément le chemin le plus emprunté.
         # Les modèles de transcription qui ne renvoient pas d'usage (whisper-1)
         # sont ignorés sans bruit par _compter.
-        _compter(r, modele or "gpt-transcribe")
+        await _compter(r, modele or "gpt-transcribe")
         return (getattr(r, "text", "") or "").strip()
 
     if fournisseur == "google":
@@ -503,7 +503,7 @@ async def _transcrire(octets: bytes, fournisseur: str, modele: str) -> str:
                     "format": "wav" if mime == "audio/wav" else "ogg"}},
             ]}],
         )
-        _compter(r, modele)
+        await _compter(r, modele)
         return (r.choices[0].message.content or "").strip()
 
     raise MediaIndisponible(f"{fournisseur.capitalize()} ne sait pas transcrire l'audio.")
@@ -532,7 +532,7 @@ async def _vision(octets: bytes, mime: str, consigne: str, fournisseur: str, mod
             model=modele or "claude-sonnet-5", max_tokens=1024,
             messages=[{"role": "user", "content": [bloc, {"type": "text", "text": consigne}]}],
         )
-        _compter(r, modele)
+        await _compter(r, modele)
         return "\n".join(
             b.text for b in r.content if getattr(b, "type", None) == "text"
         ).strip()
@@ -546,7 +546,7 @@ async def _vision(octets: bytes, mime: str, consigne: str, fournisseur: str, mod
             {"type": "text", "text": consigne},
         ]}],
     )
-    _compter(r, modele)
+    await _compter(r, modele)
     return (r.choices[0].message.content or "").strip()
 
 
@@ -596,7 +596,7 @@ def _extraire_pdf(octets: bytes) -> str:
         return ""
 
 
-def _compter(reponse, modele: str) -> None:
+async def _compter(reponse, modele: str) -> None:
     """
     Impute la dépense au plafond quotidien.
 
@@ -611,7 +611,10 @@ def _compter(reponse, modele: str) -> None:
         sortie = getattr(u, "output_tokens", None) or getattr(u, "completion_tokens", 0) or 0
         depenses.enregistrer(modele or "claude-sonnet-5", int(entree), int(sortie))
     except Exception:  # noqa: BLE001
-        pass
+        return
+    # Hors du try : une réponse sans usage exploitable ne doit pas empêcher
+    # la sauvegarde, et une erreur d'écriture est déjà tracée en aval.
+    await sauvegarder_depense()
 
 
 # ═════════════════════════════════════════════════════════════════════════

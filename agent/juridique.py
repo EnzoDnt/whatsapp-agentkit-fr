@@ -208,6 +208,45 @@ def _avertissement_console(c: dict) -> dict | None:
 
 
 
+# ── Gabarits des documents ───────────────────────────────────────────────
+#
+# La prose juridique vit dans `agent/documents/*.md`, pas dans ce fichier.
+# Deux raisons, et la seconde est la vraie :
+#
+#   1. Un avocat, un DPO ou le dirigeant peut relire et corriger un document
+#      sans ouvrir de fichier Python ni risquer d'en casser la syntaxe.
+#   2. Le texte de loi et la logique qui l'assemble n'évoluent pas au même
+#      rythme, ni sous la même responsabilité. Les séparer, c'est pouvoir
+#      relire l'un sans relire l'autre.
+#
+# Les champs sont notés `{nom}` et remplis par `.format()`. Une accolade
+# littérale dans le texte doit donc être doublée — `{{` — sinon la génération
+# échoue au premier appel, bruyamment, ce qui est le comportement voulu.
+
+DOSSIER_GABARITS = Path(__file__).resolve().parent / "documents"
+
+_cache_gabarits: dict[str, str] = {}
+
+
+def _gabarit(cle: str) -> str:
+    """
+    Lit un gabarit de document, une fois, puis le garde en mémoire.
+
+    Chemin calculé depuis le module et non depuis le dossier courant : les
+    tests et la CLI changent de répertoire de travail, un chemin relatif
+    marcherait ici et échouerait là.
+    """
+    if cle not in _cache_gabarits:
+        fichier = DOSSIER_GABARITS / f"{cle}.md"
+        if not fichier.is_file():
+            raise FileNotFoundError(
+                f"Gabarit juridique manquant : {fichier}. "
+                "Le dossier agent/documents/ doit accompagner le code."
+            )
+        _cache_gabarits[cle] = fichier.read_text(encoding="utf-8")
+    return _cache_gabarits[cle]
+
+
 def _pied(c: dict) -> str:
     revue = ""
     if c["revue_faite"] and c["revue_par"]:
@@ -262,178 +301,40 @@ def politique_confidentialite(c: dict) -> str:
              f"**{c['retention_texte']}** après le dernier message."
     )
 
-    return f"""# Politique de confidentialité
-
-## Qui traite vos données
-
-{e['raison_sociale']}, {e['forme_juridique']}, {e['immatriculation']}.
-{e['adresse']}.
-
-Pour toute question relative à vos données : **{pd['email']}**{
-    ", " + pd['telephone'] if pd.get('telephone') else ""}.
-{"Un délégué à la protection des données a été désigné : " + pd['nom'] + "."
- if pd.get('dpo_designe') else "Responsable du traitement : " + pd.get('nom', '') + "."}
-
-## Ce que nous traitons, et pourquoi
-
-Lorsque vous écrivez à notre numéro WhatsApp, nous traitons :
-
-{donnees}
-
-Ces données servent exclusivement à :
-
-{finalites}
-
-La base légale de ce traitement est {base}.
-
-Nous ne vendons aucune donnée, nous ne faisons ni prospection ni publicité à
-partir de vos messages, et nous ne construisons aucun profil publicitaire.
-
-## Comment vous nous avez donné votre accord
-
-{(t.get('opt_in') or 'Vous initiez la conversation.').capitalize().rstrip('.')}.
-
-Ce contact vaut accord pour que nous vous répondions. Il ne vaut **pas** accord
-pour recevoir des messages promotionnels : ceux-ci supposent un consentement
-distinct, que vous pouvez retirer à tout moment.
-
-## Une intelligence artificielle rédige les réponses
-
-Les réponses sont rédigées par un système d'intelligence artificielle, et vous
-en êtes informé dès le premier message. Vous pouvez à tout moment demander à
-parler à une personne : écrivez-le simplement, la conversation est transmise.
-
-Aucune décision produisant des effets juridiques à votre égard n'est prise de
-façon automatisée au sens de l'article 22 du RGPD. L'agent renseigne, prend des
-demandes et transmet ; il ne décide pas seul.
-
-Le contenu de vos messages est transmis au fournisseur du modèle pour produire
-la réponse. Il n'est pas utilisé pour entraîner des modèles.
-
-## Qui d'autre voit ces données
-
-{_tableau_tiers(c)}
-
-Ces prestataires agissent sur nos instructions et sont liés par des engagements
-de confidentialité. Les transferts hors Union européenne, lorsqu'ils existent,
-sont encadrés par les clauses contractuelles types de la Commission européenne.
-
-## Combien de temps
-
-{conservation}
-
-{journaux}
-
-Certaines données peuvent être conservées au-delà de cette durée lorsqu'une
-obligation légale l'impose, ou le temps nécessaire à la constatation ou à la
-défense d'un droit en justice. Elles sont alors archivées et leur accès est
-restreint à ce seul usage.
-
-## Ce qui est obligatoire, et ce qui ne l'est pas
-
-Aucune information ne vous est réclamée pour utiliser le service. Celles que
-vous transmettez — nom, adresse d'intervention, description d'un problème —
-nous sont nécessaires pour traiter votre demande : sans elles, nous ne pouvons
-pas y donner suite, mais vous restez libre de ne pas les fournir et de nous
-joindre autrement.
-
-Nous ne collectons aucune donnée à votre sujet auprès de tiers.
-
-## Traceurs
-
-Les pages de ce service ne déposent **aucun cookie** et n'utilisent aucun
-traceur : il n'y a donc rien à accepter ni à refuser.
-
-## Vos droits
-
-Vous disposez d'un droit d'**accès**, de **rectification**, d'**effacement**,
-de **limitation** du traitement, d'**opposition** pour motif légitime, et de
-**portabilité** de vos données. Vous pouvez également définir des **directives
-relatives au sort de vos données après votre décès** (article 85 de la loi
-Informatique et Libertés).
-
-**Pour exercer ces droits, écrivez à {pd['email']}.** Nous répondons sous un
-mois, délai qui peut être prolongé de deux mois pour une demande complexe ;
-nous vous en informerions alors. Une preuve d'identité peut être demandée en
-cas de doute raisonnable sur l'auteur de la demande. La marche à suivre pour
-obtenir l'effacement est détaillée sur notre page
-[Suppression de vos données]({(c.get('publication') or {}).get('url_publique', '')}/legal/suppression).
-
-Vous pouvez également écrire « supprimez mes données » directement dans la
-conversation WhatsApp.
-
-Si notre réponse ne vous satisfait pas, vous pouvez saisir la {j['autorite_controle']} :
-{j.get('autorite_controle_url', '')}
-
-## En cas de violation de données
-
-Si une violation de vos données survenait et présentait un risque élevé pour
-vos droits, nous vous en informerions dans les meilleurs délais, conformément
-à l'article 34 du RGPD. L'autorité de contrôle serait notifiée sous 72 heures
-comme le prévoit l'article 33.
-
-## WhatsApp
-
-Les conversations transitent par WhatsApp, service de Meta. L'usage que Meta
-fait des données de ses utilisateurs relève de sa propre politique de
-confidentialité, sur laquelle nous n'avons aucune maîtrise. Nous n'accédons
-qu'aux messages que vous nous adressez.
-{_pied(c)}"""
+    return _gabarit("confidentialite").format(
+        raison_sociale=e['raison_sociale'],
+        forme_juridique=e['forme_juridique'],
+        immatriculation=e['immatriculation'],
+        adresse=e['adresse'],
+        email=pd['email'],
+        champ=', ' + pd['telephone'] if pd.get('telephone') else '',
+        champ_2='Un délégué à la protection des données a été désigné : ' + pd['nom'] + '.' if pd.get('dpo_designe') else 'Responsable du traitement : ' + pd.get('nom', '') + '.',
+        donnees=donnees,
+        finalites=finalites,
+        base=base,
+        champ_3=(t.get('opt_in') or 'Vous initiez la conversation.').capitalize().rstrip('.'),
+        tableau_tiers=_tableau_tiers(c),
+        conservation=conservation,
+        journaux=journaux,
+        champ_4=(c.get('publication') or {}).get('url_publique', ''),
+        autorite_controle=j['autorite_controle'],
+        champ_5=j.get('autorite_controle_url', ''),
+        pied=_pied(c),
+    )
 
 
 def suppression_donnees(c: dict) -> str:
     e = c["entreprise"]
     pd = c["protection_donnees"]
-    return f"""# Suppression de vos données
-
-Vous pouvez à tout moment demander la suppression des données que
-{e['raison_sociale']} détient sur vous. Voici comment, et ce qui se passe ensuite.
-
-## Trois façons de demander
-
-**Dans la conversation.** Écrivez « supprimez mes données » à notre numéro
-WhatsApp. La demande est transmise à notre équipe.
-
-**Par courriel.** Écrivez à **{pd['email']}** depuis l'adresse de votre choix,
-en indiquant le numéro de téléphone concerné.
-
-**Par courrier.** {e['raison_sociale']}, {e['adresse']}.
-
-## Ce que nous supprimons
-
-- L'historique complet de vos conversations avec l'agent
-- Les fichiers que vous nous avez envoyés : photos, notes vocales, documents
-- Les demandes enregistrées à votre nom
-- L'empreinte de votre numéro dans nos journaux techniques
-
-## Ce que nous devons conserver
-
-Certaines données ne peuvent pas être effacées immédiatement lorsqu'une
-obligation légale l'impose : une facture est conservée dix ans au titre du code
-de commerce, indépendamment de votre demande. Nous vous indiquons précisément ce
-qui est concerné dans notre réponse.
-
-## Délais
-
-Nous accusons réception sous 72 heures et procédons à l'effacement **sous un
-mois**, conformément à l'article 12.3 du RGPD. Si la demande est complexe, ce
-délai peut être prolongé de deux mois ; nous vous en informons alors avec le
-motif.
-
-À l'issue de l'opération, nous vous confirmons par écrit ce qui a été supprimé.
-
-## Suppression automatique
-
-Indépendamment de toute demande, l'historique des conversations est
-{"conservé sans limite de durée — configuration déconseillée" if c["retention_jours"] == 0
- else f"effacé automatiquement {c['retention_texte']} après le dernier message"}.
-
-## En cas de désaccord
-
-Si vous estimez que votre demande n'a pas été traitée correctement, vous pouvez
-saisir la {c['juridiction']['autorite_controle']} :
-{c['juridiction'].get('autorite_controle_url', '')}
-{_pied(c)}"""
+    return _gabarit("suppression").format(
+        raison_sociale=e['raison_sociale'],
+        email=pd['email'],
+        adresse=e['adresse'],
+        champ='conservé sans limite de durée — configuration déconseillée' if c['retention_jours'] == 0 else f"effacé automatiquement {c['retention_texte']} après le dernier message",
+        champ_2=c['juridiction']['autorite_controle'],
+        champ_3=c['juridiction'].get('autorite_controle_url', ''),
+        pied=_pied(c),
+    )
 
 
 def conditions_utilisation(c: dict) -> str:
@@ -452,169 +353,17 @@ def conditions_utilisation(c: dict) -> str:
     j = c["juridiction"]
     base = (c.get("publication") or {}).get("url_publique", "").rstrip("/")
     tel = e.get("telephone", "")
-    return f"""# Conditions d'utilisation du service de messagerie
-
-En vigueur au {c.get('genere_le', '')}.
-
-## Article 1 — Objet et champ d'application
-
-1.1. Les présentes conditions régissent l'usage de l'assistant conversationnel
-que {e['raison_sociale']} met à disposition sur WhatsApp, ci-après « le
-service ».
-
-1.2. Elles ne régissent **que** ce canal de communication. Les conditions
-applicables aux prestations de {e['raison_sociale']}, à leur prix et à leur
-exécution font l'objet de documents distincts, remis par l'entreprise.
-
-1.3. En adressant un message à notre numéro, vous acceptez les présentes
-conditions. Si vous les refusez, n'utilisez pas le service : nos autres moyens
-de contact restent à votre disposition{f", notamment le {tel}" if tel else ""}.
-
-## Article 2 — Description du service
-
-2.1. Le service répond aux questions portant sur l'activité de
-{e['raison_sociale']}, enregistre les demandes et transmet à l'équipe celles
-qui le nécessitent.
-
-2.2. Il est **gratuit**. Seuls les coûts de connexion facturés par votre
-opérateur ou par WhatsApp, le cas échéant, restent à votre charge.
-
-2.3. Il est réservé à un usage personnel, dans le cadre de votre relation avec
-{e['raison_sociale']}. Ce n'est pas un assistant généraliste : il ne traite
-aucun sujet étranger à notre activité.
-
-## Article 3 — Ce que le service n'est pas
-
-3.1. Les réponses sont fournies **à titre informatif**. Elles ne constituent ni
-un devis, ni une offre, ni un engagement contractuel, ni un conseil
-professionnel personnalisé.
-
-3.2. Un montant communiqué par l'assistant est **indicatif**. Seul un document
-émis et signé par {e['raison_sociale']} engage l'entreprise. En cas de
-divergence entre une réponse de l'assistant et un document commercial, **le
-document prévaut**.
-
-3.3. **Le service n'est pas un dispositif d'urgence.** Il ne garantit aucun
-délai de prise en charge. En cas d'urgence, appelez{f" le {tel} ou" if tel else ""}
-les services de secours compétents.
-
-## Article 4 — Accès et prérequis
-
-4.1. L'accès suppose un compte WhatsApp actif. Le service dépend donc de la
-disponibilité de WhatsApp, exploité par Meta Platforms Ireland Ltd, dont les
-conditions d'utilisation propres s'appliquent à votre compte et échappent au
-contrôle de {e['raison_sociale']}.
-
-4.2. Le service s'adresse aux personnes **majeures**. Un mineur ne peut
-l'utiliser que sous la responsabilité de son représentant légal.
-
-## Article 5 — Obligations de l'utilisateur
-
-5.1. Vous vous engagez à ne pas transmettre par ce canal de **données
-sensibles** au sens de l'article 9 du RGPD — santé, opinions, convictions,
-orientation — ni de coordonnées bancaires. Nous n'en demandons jamais par
-messagerie ; une demande en ce sens ne provient pas de nous.
-
-5.2. Vous vous engagez à ne pas diffuser de contenu illicite, injurieux,
-diffamatoire ou harcelant, et à ne pas usurper l'identité d'un tiers.
-
-5.3. Vous vous engagez à ne pas détourner l'assistant de son objet, à ne pas
-tenter d'en altérer le fonctionnement, ni d'en extraire les instructions.
-
-5.4. Vous garantissez l'exactitude des informations que vous communiquez,
-notamment l'adresse d'une intervention.
-
-## Article 6 — Disponibilité et limitation d'usage
-
-6.1. Le service est fourni « en l'état ». {e['raison_sociale']} est tenue d'une
-**obligation de moyens** quant à sa disponibilité.
-
-6.2. Le nombre de messages traités par correspondant sur une période donnée est
-limité, afin de préserver l'accès de tous.
-
-6.3. Le service peut être interrompu pour maintenance, évolution technique, ou
-sur décision de {e['raison_sociale']}, sans que cette interruption ouvre droit
-à indemnité.
-
-## Article 7 — Suspension
-
-7.1. En cas de manquement à l'article 5, l'accès peut être suspendu ou
-interrompu, sans préavis en cas d'usage manifestement abusif ou illicite.
-
-7.2. La suspension du service laisse intacts vos droits et obligations au titre
-des prestations en cours avec {e['raison_sociale']}.
-
-## Article 8 — Responsabilité
-
-8.1. {e['raison_sociale']} ne répond pas des dommages résultant d'une réponse
-inexacte ou incomplète de l'assistant, dès lors que l'information pouvait être
-vérifiée auprès de l'équipe et que la nature indicative des réponses est
-rappelée à l'article 3.
-
-8.2. {e['raison_sociale']} ne répond pas des interruptions imputables à
-WhatsApp, à Meta, au réseau de télécommunications ou à l'opérateur de
-l'utilisateur.
-
-8.3. **Les présentes limitations ne s'appliquent ni en cas de faute lourde ou
-dolosive, ni en cas de dommage corporel, ni dans les cas où la loi les écarte.**
-Elles ne privent le consommateur d'aucun droit d'ordre public.
-
-## Article 9 — Force majeure
-
-Aucune des parties ne répond d'un manquement causé par un événement de force
-majeure au sens de l'article 1218 du Code civil, notamment une panne
-généralisée des réseaux, une interruption durable des services de Meta, ou une
-décision d'une autorité publique. L'obligation est suspendue pendant la durée
-de l'événement.
-
-## Article 10 — Preuve
-
-10.1. Les échanges intervenus par ce canal sont conservés dans les conditions
-décrites par notre [politique de confidentialité]({base}/legal/confidentialite).
-
-10.2. Les parties conviennent que ces enregistrements, ainsi que les journaux
-techniques du service, constituent un **mode de preuve recevable** de la teneur
-et de la date des échanges, sauf preuve contraire rapportée par tout moyen.
-
-## Article 11 — Propriété intellectuelle
-
-Les contenus diffusés par l'assistant — textes, documents, tarifs — demeurent
-la propriété de {e['raison_sociale']}. Ils vous sont communiqués pour votre
-information personnelle et ne peuvent être reproduits ou diffusés publiquement
-sans autorisation écrite.
-
-## Article 12 — Données personnelles
-
-Le traitement de vos données est décrit dans notre
-[politique de confidentialité]({base}/legal/confidentialite). La procédure
-d'effacement figure sur la page
-[Suppression de vos données]({base}/legal/suppression). L'usage de
-l'intelligence artificielle est détaillé sur la page
-[Usage de l'intelligence artificielle]({base}/legal/ia).
-
-## Article 13 — Durée et modification
-
-13.1. Les présentes s'appliquent tant que vous utilisez le service. Vous pouvez
-cesser de l'utiliser à tout moment, sans formalité.
-
-13.2. Elles peuvent être modifiées. La version applicable est celle publiée à
-cette adresse à la date de votre message ; sa date d'entrée en vigueur figure
-en tête du document. Une modification substantielle est signalée dans la
-conversation.
-
-## Article 14 — Réclamation, droit applicable et juridiction
-
-14.1. Toute réclamation relative au service peut être adressée à
-{e['email']}. Nous accusons réception sous 5 jours ouvrés et répondons dans un
-délai raisonnable.
-
-14.2. Si l'une des présentes clauses était déclarée nulle ou inapplicable, les
-autres conserveraient leur plein effet.
-
-14.3. Les présentes sont soumises au {j['droit_applicable']}. À défaut de
-résolution amiable, compétence est attribuée aux {j['tribunal']}, sous réserve
-des règles impératives protégeant le consommateur.
-{_pied(c)}"""
+    return _gabarit("cgu").format(
+        champ=c.get('genere_le', ''),
+        raison_sociale=e['raison_sociale'],
+        champ_2=f', notamment le {tel}' if tel else '',
+        champ_3=f' le {tel} ou' if tel else '',
+        base=base,
+        email=e['email'],
+        droit_applicable=j['droit_applicable'],
+        tribunal=j['tribunal'],
+        pied=_pied(c),
+    )
 
 
 
@@ -660,47 +409,18 @@ def mentions_legales(c: dict) -> str:
         heb.append(str(h["telephone"]))
     hebergeur = "  \n".join(heb)
 
-    return f"""# Mentions légales
-
-## Éditeur du service
-
-{identite}
-
-Directeur de la publication : {e['representant_legal']}{assurance}
-
-## Hébergeur
-
-{hebergeur}
-
-Les données du service sont hébergées en **{h.get('pays_donnees', 'non précisé')}**.
-
-## Nature du service
-
-Ce service est un canal de communication mis à disposition par
-{e['raison_sociale']}. Il ne constitue pas une plateforme de vente en ligne :
-aucune commande n'y est conclue et aucun paiement n'y est traité. Les
-conditions d'usage figurent sur la page
-[Conditions d'utilisation]({base}/legal/cgu).
-
-## Propriété intellectuelle
-
-Les contenus diffusés par l'assistant — textes, documents, tarifs — demeurent
-la propriété de {e['raison_sociale']}, de même que la marque et les signes
-distinctifs qui y figurent. Toute reproduction ou diffusion publique sans
-autorisation écrite est interdite.
-
-## Données personnelles
-
-Le traitement des données est décrit sur la page
-[Politique de confidentialité]({base}/legal/confidentialite).
-Contact : {(c.get('protection_donnees') or {}).get('email', e['email'])}.
-
-## Signalement d'un contenu illicite
-
-Pour signaler un contenu illicite diffusé par ce service, écrivez à
-{e['email']} en précisant la date, le contenu concerné et le motif du
-signalement. Nous accusons réception sous 5 jours ouvrés.
-{_pied(c)}"""
+    return _gabarit("mentions").format(
+        identite=identite,
+        representant_legal=e['representant_legal'],
+        assurance=assurance,
+        hebergeur=hebergeur,
+        champ=h.get('pays_donnees', 'non précisé'),
+        raison_sociale=e['raison_sociale'],
+        base=base,
+        champ_2=(c.get('protection_donnees') or {}).get('email', e['email']),
+        email=e['email'],
+        pied=_pied(c),
+    )
 
 
 
@@ -712,93 +432,26 @@ def transparence_ia(c: dict) -> str:
         "validation": "une relecture humaine avant tout envoi",
     }
     mention = modes.get(c["mode_transparence"], c["mode_transparence"])
-    return f"""# Information sur l'usage de l'intelligence artificielle
-
-## Vous parlez à une machine, et vous en êtes informé
-
-Les réponses de l'assistant WhatsApp de {e['raison_sociale']} sont rédigées par
-un système d'intelligence artificielle. Vous en êtes averti par {mention}.
-
-Cette information répond à l'article 50 du règlement européen sur
-l'intelligence artificielle, applicable depuis le 2 août 2026, qui impose
-d'informer une personne lorsqu'elle interagit avec un système d'IA.
-
-## Ce que le système fait, et ne fait pas
-
-Il consulte nos documents internes pour répondre, enregistre des demandes, et
-transmet à un humain ce qui le dépasse. Il **ne prend aucune décision** ayant
-des effets juridiques ou vous affectant de manière significative, au sens de
-l'article 22 du RGPD.
-
-Un système d'IA peut se tromper ou formuler une réponse inexacte. Les
-informations importantes — un prix, un délai, un engagement — doivent être
-confirmées par notre équipe.
-
-## Parler à une personne
-
-Écrivez-le simplement dans la conversation. La demande est transmise, et
-l'assistant cesse de répondre sur cette conversation le temps que quelqu'un
-reprenne la main.
-
-## Le modèle utilisé
-
-Les réponses sont produites par un modèle de langage fourni par un prestataire
-tiers, désigné dans notre
-[politique de confidentialité]({(c.get('publication') or {}).get('url_publique','')}/legal/confidentialite).
-Vos messages lui sont transmis pour produire la réponse, et ne servent pas à
-entraîner ses modèles.
-{_pied(c)}"""
+    return _gabarit("ia").format(
+        raison_sociale=e['raison_sociale'],
+        mention=mention,
+        champ=(c.get('publication') or {}).get('url_publique', ''),
+        pied=_pied(c),
+    )
 
 
 def annexe_sous_traitance(c: dict) -> str:
     """Générée uniquement en mode agence (article 28 du RGPD)."""
     i = c.get("integrateur") or {}
     e = c["entreprise"]
-    return f"""# Annexe — traitement des données en sous-traitance
-
-Cette annexe précise la répartition des rôles entre
-{e['raison_sociale']} et {i.get('raison_sociale', "l'intégrateur")} au titre de
-l'article 28 du RGPD. **Elle ne remplace pas un contrat de sous-traitance signé**
-: elle en documente le contenu attendu, à faire valider par vos conseils
-respectifs.
-
-## Qui fait quoi
-
-| | Rôle | Responsabilité |
-|---|---|---|
-| {e['raison_sociale']} | **Responsable de traitement** | Détermine les finalités, répond aux personnes concernées, choisit les durées |
-| {i.get('raison_sociale', "L'intégrateur")} | **Sous-traitant** | Déploie et maintient l'agent sur instruction, n'utilise les données pour aucune finalité propre |
-
-Contact du sous-traitant pour les questions de données : {i.get('contact_donnees', i.get('email', 'à renseigner'))}
-
-## Engagements du sous-traitant
-
-- Ne traiter les données que sur instruction documentée du responsable.
-- Garantir la confidentialité des personnes autorisées à y accéder.
-- Mettre en œuvre les mesures techniques prévues : signature des webhooks,
-  masquage des numéros dans les journaux, purge automatique après
-  {c['retention_texte']}, chiffrement des accès.
-- Ne pas recruter de sous-traitant ultérieur sans autorisation écrite. Ceux
-  déjà mobilisés sont listés dans la politique de confidentialité.
-- Assister le responsable dans les demandes d'exercice de droits et les
-  notifications de violation, sous 48 heures.
-- Restituer ou supprimer les données en fin de prestation, au choix du
-  responsable.
-- Permettre les audits et fournir les éléments nécessaires à leur réalisation.
-
-## Notification d'incident
-
-Toute violation de données est signalée au responsable **dans les 24 heures**
-suivant sa découverte, avec sa nature, les catégories et le volume de données
-concernées, et les mesures prises. C'est le responsable qui notifie l'autorité
-de contrôle dans les 72 heures.
-
-## Fin de la prestation
-
-À l'échéance, le sous-traitant supprime les données et les copies existantes
-dans un délai de 30 jours, sauf obligation légale de conservation, et en atteste
-par écrit.
-{_pied(c)}"""
+    return _gabarit("sous-traitance").format(
+        raison_sociale=e['raison_sociale'],
+        champ=i.get('raison_sociale', "l'intégrateur"),
+        champ_2=i.get('raison_sociale', "L'intégrateur"),
+        champ_3=i.get('contact_donnees', i.get('email', 'à renseigner')),
+        retention_texte=c['retention_texte'],
+        pied=_pied(c),
+    )
 
 
 DOCUMENTS = {

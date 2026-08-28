@@ -423,3 +423,175 @@ class TestEnTetesHTTP:
             assert "--no-server-header" in ligne, (
                 f"le compose surcharge le démarrage sans conserver l'option : {ligne.strip()}"
             )
+
+
+class TestPlafondSurvitAuRedemarrage:
+    """
+    Le plafond de dépense doit valoir pour la JOURNÉE, pas pour la période de
+    fonctionnement du conteneur.
+
+    Tant que le cumul ne vivait qu'en mémoire, chaque redéploiement le remettait
+    à zéro — et il y a un redéploiement à chaque `git push`. Trois mises en ligne
+    dans la journée, et un plafond de 5 $ en autorisait 20.
+    """
+
+    @pytest.mark.asyncio
+    async def test_le_cumul_est_relu_apres_un_redemarrage(self, env_propre):
+        from agent.memory import initialiser_base
+        from agent.securite import depenses, restaurer_depense, sauvegarder_depense
+
+        await initialiser_base()
+
+        depenses._depense = 0.0
+        depenses._jour = depenses.jour_courant
+        depenses.enregistrer("claude-sonnet-5", 400_000, 20_000)
+        engage = depenses.depense_du_jour
+        assert engage > 0
+        await sauvegarder_depense()
+
+        # Le conteneur redémarre : le processus repart avec un compteur neuf.
+        depenses._depense = 0.0
+        depenses._jour = ""
+        assert depenses.depense_du_jour == 0.0
+
+        await restaurer_depense()
+        assert depenses.depense_du_jour == engage, (
+            "après redémarrage le cumul est reparti de zéro : le plafond "
+            "journalier se contourne en redéployant"
+        )
+
+    @pytest.mark.asyncio
+    async def test_le_plafond_reste_franchi_apres_un_redemarrage(self, env_propre):
+        """Ce qui compte n'est pas le chiffre relu, c'est que la coupure tienne."""
+        from agent.memory import initialiser_base
+        from agent.securite import depenses, restaurer_depense, sauvegarder_depense
+
+        await initialiser_base()
+        ancien_plafond = depenses.plafond_journalier
+        try:
+            depenses.plafond_journalier = 0.01
+            depenses._depense = 0.0
+            depenses._jour = depenses.jour_courant
+            depenses.enregistrer("claude-sonnet-5", 400_000, 20_000)
+            assert depenses.depassement()
+            await sauvegarder_depense()
+
+            depenses._depense, depenses._jour = 0.0, ""
+            assert not depenses.depassement(), "le redémarrage rouvre bien le robinet…"
+
+            await restaurer_depense()
+            assert depenses.depassement(), "…et la relecture doit le refermer"
+        finally:
+            depenses.plafond_journalier = ancien_plafond
+            depenses._depense, depenses._jour = 0.0, ""
+
+    @pytest.mark.asyncio
+    async def test_la_depense_d_hier_ne_compte_pas_aujourd_hui(self, env_propre):
+        """Une ligne datée d'hier ne doit pas grever la journée qui commence."""
+        from agent.memory import ecrire_depense_jour, initialiser_base
+        from agent.securite import depenses, restaurer_depense
+
+        await initialiser_base()
+        await ecrire_depense_jour("2020-01-01", 999.0)
+
+        depenses._depense, depenses._jour = 0.0, ""
+        await restaurer_depense()
+        assert depenses.depense_du_jour == 0.0
+
+
+class TestGabaritsJuridiques:
+    """
+    La prose juridique vit dans `agent/documents/*.md`.
+
+    Ce découpage a un risque propre, et il est sournois : les gabarits sont
+    des fichiers, donc ils peuvent manquer là où le code est présent — écartés
+    par un `.dockerignore`, oubliés dans un paquet, perdus à une copie. La
+    panne n'apparaît alors qu'en production, quand un visiteur clique sur
+    « Politique de confidentialité ».
+    """
+
+    CLES = ("confidentialite", "cgu", "mentions", "suppression", "ia", "sous-traitance")
+
+    def test_les_six_gabarits_sont_livres_avec_le_code(self):
+        dossier = RACINE_KIT / "agent" / "documents"
+        manquants = [c for c in self.CLES if not (dossier / f"{c}.md").is_file()]
+        assert not manquants, f"gabarits absents : {manquants}"
+
+    def test_le_dockerignore_n_ecarte_pas_les_gabarits(self):
+        """
+        `*.md` est présent dans le .dockerignore pour exclure la doc. Les
+        gabarits doivent être explicitement réadmis, sinon l'image se
+        construit sans eux et rien ne le signale avant la production.
+        """
+        regles = (RACINE_KIT / ".dockerignore").read_text(encoding="utf-8")
+        assert "!agent/documents/*.md" in regles, (
+            "les gabarits juridiques ne sont pas explicitement réadmis dans l'image"
+        )
+
+    def test_aucune_prose_n_est_restee_dans_le_code(self):
+        """
+        Le but du découpage est qu'un juriste relise les documents sans ouvrir
+        de Python. Une fonction qui rendrait encore du texte en dur viderait
+        l'opération de son sens, sans casser aucun test.
+        """
+        import ast
+
+        source = (RACINE_KIT / "agent" / "juridique.py").read_text(encoding="utf-8")
+        arbre = ast.parse(source)
+        cibles = {"politique_confidentialite", "conditions_utilisation", "mentions_legales",
+                  "suppression_donnees", "transparence_ia", "annexe_sous_traitance"}
+        # Seuil à 400 caractères : le plus court des six documents en fait 1195,
+        # et le plus long fragment légitimement resté dans le code — la section
+        # « Assurance professionnelle », insérée seulement si l'entreprise en
+        # déclare une — en fait une quarantaine. Un document réintroduit en dur
+        # serait donc attrapé, une condition d'assemblage non.
+        SEUIL = 400
+        fautifs = []
+        for n in ast.walk(arbre):
+            if not (isinstance(n, ast.FunctionDef) and n.name in cibles):
+                continue
+            # La docstring est un Constant comme un autre : on l'écarte par
+            # identité, pas par comparaison de texte.
+            docstring = (n.body[0].value
+                         if n.body and isinstance(n.body[0], ast.Expr)
+                         and isinstance(n.body[0].value, ast.Constant) else None)
+            for x in ast.walk(n):
+                if (isinstance(x, ast.Constant) and isinstance(x.value, str)
+                        and x is not docstring and len(x.value) > SEUIL):
+                    fautifs.append(f"{n.name} (ligne {x.lineno}, {len(x.value)} car.)")
+        assert not fautifs, f"prose encore en dur dans : {fautifs}"
+
+    def test_chaque_gabarit_se_remplit_sans_champ_manquant(self, conf_juridique):
+        """
+        Un `{champ}` présent dans le .md mais absent de l'appel `.format()`
+        lève un KeyError au moment de générer — c'est-à-dire devant le
+        visiteur. On le découvre ici à la place.
+        """
+        J = conf_juridique
+        c = J.contexte(J.charger())
+        c["mode"] = "agence"          # pour couvrir aussi l'annexe de sous-traitance
+        for cle, (titre, fabrique) in J.documents_disponibles(c).items():
+            texte = fabrique(c)
+            assert texte.strip(), f"{cle} est vide"
+            assert "{" not in texte, f"{cle} contient un champ non remplacé"
+
+
+@pytest.fixture()
+def conf_juridique(tmp_path, monkeypatch):
+    """Le module juridique, chargé sur une configuration d'exemple isolée."""
+    import importlib
+    import shutil
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    shutil.copy(RACINE_KIT / "config" / "juridique.exemple.yaml",
+                tmp_path / "config" / "juridique.yaml")
+    monkeypatch.setenv("RETENTION_JOURS", "90")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("MODE_TRANSPARENCE", "discrete")
+    for var in ("MEDIA_FOURNISSEUR", "MEDIA_AUDIO_FOURNISSEUR", "MEDIA_IMAGE_FOURNISSEUR",
+                "MEDIA_VIDEO_FOURNISSEUR", "MEDIA_DOCUMENT_FOURNISSEUR"):
+        monkeypatch.delenv(var, raising=False)
+    import agent.juridique as J
+
+    return importlib.reload(J)

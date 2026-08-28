@@ -26,6 +26,13 @@ Makefile
 # Documentation : n'a rien à faire dans l'image
 *.md
 !knowledge/*.md
+# Les gabarits juridiques SI : ce sont des données du programme, pas de la
+# documentation. Sans eux l'agent démarre puis échoue à générer ses documents
+# légaux — une panne qui n'apparaît qu'en production, au moment où un client
+# clique sur « Politique de confidentialité ». La négation est explicite même
+# si le motif `*.md` ne descend pas dans les sous-dossiers : on ne fait pas
+# dépendre la conformité RGPD d'une subtilité de globbing.
+!agent/documents/*.md
 
 # Système
 .DS_Store

@@ -36,6 +36,7 @@ from agent.securite import (
     limiteur,
     masquer_contenu,
     masquer_identifiant,
+    restaurer_depense,
 )
 
 load_dotenv()
@@ -121,6 +122,11 @@ async def cycle_de_vie(app: FastAPI):
     await initialiser_base()
     await nettoyer_evenements_anciens()
     await purger_donnees_expirees()
+    # Le plafond de dépense reprend là où il s'était arrêté. Sans cette ligne,
+    # un redéploiement en milieu de journée rouvre le robinet en grand.
+    cumul = await restaurer_depense()
+    if cumul:
+        logger.info(f"Dépense déjà engagée aujourd'hui : {cumul:.4f} $")
 
     try:
         fournisseur = obtenir_fournisseur()
