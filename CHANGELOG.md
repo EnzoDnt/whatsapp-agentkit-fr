@@ -11,7 +11,21 @@ pour qu'une mise à jour ne soit jamais une découverte.
 
 ## [Non publié]
 
-Rien pour l'instant.
+### Ajouté
+
+- **Mention de non-affiliation à Meta** en pied de chaque page `/legal`. Les
+  règles de marque de WhatsApp interdisent de laisser croire à un partenariat
+  ou à une approbation, et ces pages parlent de WhatsApp à chaque section, sur
+  un domaine que Meta examine.
+- **`python -m agent.juridique --site`** et la rubrique « À mettre sur votre
+  site » de la console : les textes que l'entreprise place sur son propre site
+  (liens vers les documents, mention de non-affiliation, libellé de
+  consentement), tirés de la même configuration que les documents.
+- **`traitement.formulaire_whatsapp`** : quand un formulaire du site recueille
+  le numéro et que l'entreprise écrit la première, la politique de
+  confidentialité décrit ce consentement, et `--verifier` exige
+  `entreprise.site_web`. L'assistant d'installation pose la question
+  (`AGENTS.md`, Q5 bis).
 
 ## [1.0.0] — 2026-08-28
 

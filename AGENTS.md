@@ -376,6 +376,19 @@ sous-traitance (art. 28 RGPD) est générée en plus.
 
 ---
 
+**Q5 bis. Le formulaire du site** *(oui ou non)*
+
+> **Sur votre site, est-ce qu'un formulaire permet à quelqu'un de laisser son
+> numéro pour que vous lui écriviez sur WhatsApp ?**
+> Un simple bouton « Écrire sur WhatsApp » ne compte pas : là, c'est le client
+> qui écrit en premier.
+
+✅ Oui → `traitement.formulaire_whatsapp: true`, et `entreprise.site_web`
+renseigné (`--verifier` le réclame). La politique de confidentialité décrit
+alors ce consentement. Non, ou pas de site → laisse `false`.
+
+---
+
 **Reformule avant d'écrire.** Comme à l'étape 2 : récapitule ce que tu as
 compris en trois lignes, fais valider, puis écris le fichier. Une raison
 sociale mal orthographiée dans des mentions légales se corrige mal une fois
@@ -411,6 +424,32 @@ Tente d'abord l'API — `POST /{app_id}` accepte `privacy_policy_url` et
 `terms_of_service_url` avec un jeton d'application. Si elle refuse, c'est un
 bloc « J'ai besoin de toi » : ces trois champs se posent dans **Paramètres →
 Général** du tableau de bord Meta.
+
+**Ce qui va sur son site**, juste après les URL dans Meta :
+
+```bash
+python -m agent.juridique --site
+```
+
+Tu n'as pas accès à son site : remets-lui le résultat tel quel, dans un bloc
+« J'ai besoin de toi ». Dis-lui pourquoi en deux phrases : le site déclaré dans
+son portefeuille Meta Business est l'endroit où l'on vérifie qui il est, et un
+domaine vide ou une identité qui change d'une page à l'autre joue contre lui.
+Trois choses à y mettre :
+
+- en pied de chaque page, les liens vers les documents et la mention de
+  non-affiliation à Meta (les pages `/legal` la portent déjà, son site doit
+  porter la même) ;
+- si `formulaire_whatsapp` est actif, le libellé de la case de consentement :
+  case non cochée par défaut, et le formulaire garde la date et le texte avec
+  chaque numéro reçu ;
+- la même raison sociale, la même adresse et la même immatriculation que dans
+  `config/juridique.yaml` et dans le portefeuille Meta.
+
+S'il n'a pas de site du tout, dis-le clairement : un domaine qui ne sert qu'à
+l'adresse e-mail ne rassure personne, et c'est le chantier à ouvrir avant de
+créer quoi que ce soit chez Meta. La console lui redonne ces textes dans
+*Réglages → Documents juridiques*.
 
 **Q6 — La relecture juridique**
 

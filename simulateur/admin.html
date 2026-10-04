@@ -634,6 +634,21 @@ async function chargerJuridique(){
             <td><code>${esc(d.meta.data_deletion_url)}</code></td></tr>
       </table>
     </details>
+
+    <details style="margin:0 0 var(--e4)">
+      <summary style="cursor:pointer">À mettre sur votre site</summary>
+      <p class="ptt dis" style="margin:8px 0">
+        Le site déclaré dans votre portefeuille Meta Business doit dire qui vous êtes,
+        avec la même raison sociale, la même adresse et la même immatriculation que ces
+        pages. En pied de chaque page : les liens ci-dessus et cette mention.</p>
+      <div class="avis" style="margin:0 0 var(--e3)">${esc(d.site.mention_meta)}</div>
+      ${d.site.consentement_formulaire?`
+      <p class="ptt dis" style="margin:8px 0">
+        Dans le formulaire qui mène à WhatsApp, comme libellé d'une case à cocher non
+        cochée par défaut. Gardez la date et ce texte avec chaque numéro reçu : c'est la
+        preuve du consentement.</p>
+      <div class="avis">${esc(d.site.consentement_formulaire)}</div>`:''}
+    </details>
     ${alertes}
 
     <div class="avis" style="margin-bottom:var(--e3)">${etatTexte}</div>
