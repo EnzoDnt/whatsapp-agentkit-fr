@@ -102,6 +102,15 @@ traitement:
   # PAS pour de la prospection ultérieure.
   opt_in: "le client initie la conversation en écrivant au numéro de l'entreprise"
 
+  # Un formulaire de votre site recueille le numéro de la personne, et c'est
+  # VOUS qui lui écrivez en premier sur WhatsApp (rappel, devis, envoi d'un
+  # document) ? Passez à true et renseignez entreprise.site_web. La politique
+  # de confidentialité décrit alors ce consentement, et
+  # `python -m agent.juridique --site` donne le libellé de la case à cocher.
+  # Un simple bouton « Écrire sur WhatsApp » ne compte pas : la personne écrit
+  # la première, c'est le cas décrit par opt_in ci-dessus.
+  formulaire_whatsapp: false
+
 # ─── Juridiction ──────────────────────────────────────────────────────────
 juridiction:
   pays: "France"

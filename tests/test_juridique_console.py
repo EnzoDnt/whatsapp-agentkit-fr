@@ -164,3 +164,19 @@ def test_l_acces_exige_une_session(client):
     assert client.get("/admin/juridique").status_code == 401
     assert client.post("/admin/juridique/decision",
                        json={"decision": "assumee", "par": "X"}).status_code == 401
+
+
+def test_la_console_donne_les_textes_du_site(env_propre, connecte):
+    """
+    Le site de l'entreprise échappe au kit. La console remet ce qu'il faut y
+    placer, tiré de la même configuration que les documents publiés.
+    """
+    _installer(env_propre)
+    d = connecte.get("/admin/juridique").json()
+    assert "Meta Platforms, Inc." in d["site"]["mention_meta"]
+    assert d["site"]["consentement_formulaire"] is None
+    assert all(l["url"].startswith("https://agent.durand.test/legal/")
+               for l in d["site"]["liens"])
+
+    # La même mention figure en pied de chaque page publique.
+    assert "ni sponsorisé" in connecte.get("/legal/mentions").text

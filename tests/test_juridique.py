@@ -515,3 +515,112 @@ def test_les_urls_legal_citees_dans_la_doc_existent(conf):
                 f"{md.name} cite /legal/{cible}, qui n'est pas un document. "
                 f"Documents : {sorted(connues)}"
             )
+
+
+# ── Ce qui sort de /legal : le site de l'entreprise ──────────────────────
+
+
+def _avec_formulaire(conf, site="https://exemple.fr"):
+    base = conf.charger()
+    return {
+        **base,
+        "entreprise": {**base["entreprise"], "site_web": site},
+        "traitement": {**base["traitement"], "formulaire_whatsapp": True},
+    }
+
+
+def test_chaque_page_publique_porte_la_mention_de_non_affiliation(conf):
+    """
+    Les règles de marque de WhatsApp interdisent de laisser croire à un
+    partenariat ou à une approbation. Des pages qui parlent de WhatsApp à
+    chaque section, sur un domaine que Meta examine, le laissent croire si
+    rien ne dit le contraire. Toutes, pas seulement la politique.
+    """
+    c = conf.contexte(conf.charger())
+    for cle, (titre, fn) in conf.documents_disponibles(c).items():
+        html = conf.page_html(titre, fn(c), c)
+        assert "ni sponsorisé" in html, f"{cle} : mention de non-affiliation absente"
+        assert "Meta Platforms, Inc." in html, f"{cle} : mention de non-affiliation absente"
+
+
+def test_la_mention_meta_reste_hors_des_gabarits(conf):
+    """
+    Elle appartient à la page, pas au document : un juriste qui relit la
+    politique n'a pas à la retrouver au milieu du texte, et un gabarit modifié
+    ne doit pas pouvoir la faire disparaître.
+    """
+    c = conf.contexte(conf.charger())
+    for cle, (_, fn) in conf.documents_disponibles(c).items():
+        assert conf.MENTION_META not in fn(c), f"{cle} : mention recopiée dans le gabarit"
+
+
+def test_sans_formulaire_la_politique_n_en_parle_pas(conf):
+    """Le cas par défaut : le client écrit le premier, aucun formulaire."""
+    c = conf.contexte(conf.charger())
+    assert "formulaire" not in conf.politique_confidentialite(c)
+    assert conf.textes_site(c)["consentement_formulaire"] is None
+
+
+def test_avec_formulaire_la_politique_annonce_le_consentement(conf):
+    """
+    Quand l'entreprise écrit la première après un formulaire, ce premier
+    message repose sur un consentement : la politique doit le dire, nommer le
+    site, et dire comment le retirer.
+    """
+    c = conf.contexte(_avec_formulaire(conf, "https://plomberie-durand.fr"))
+    t = conf.politique_confidentialite(c)
+    assert "formulaire" in t
+    assert "https://plomberie-durand.fr" in t
+    assert "6.1.a" in t
+    assert c["protection_donnees"]["email"] in t
+    assert not re.search(r"\{[a-z_]", t)
+
+
+def test_le_libelle_de_consentement_couvre_ce_que_meta_attend(conf):
+    """
+    La politique de messagerie de Meta veut un accord qui nomme l'entreprise
+    et dise que les messages arrivent sur WhatsApp. On ajoute comment arrêter,
+    et où lire la politique.
+    """
+    c = conf.contexte(_avec_formulaire(conf))
+    libelle = conf.textes_site(c)["consentement_formulaire"]
+    assert c["entreprise"]["raison_sociale"] in libelle
+    assert "WhatsApp" in libelle
+    assert "arrêt" in libelle
+    assert "/legal/confidentialite" in libelle
+
+
+def test_un_formulaire_sans_site_est_signale(conf):
+    """La politique doit pouvoir nommer le site où vit le formulaire."""
+    problemes = conf.verifier(_avec_formulaire(conf, site=""))
+    assert any("formulaire_whatsapp" in p for p in problemes)
+
+
+def test_les_liens_du_site_pointent_vers_des_documents_publies(conf):
+    """
+    Un lien de pied de page vers une page qui n'existe pas se voit de tous les
+    visiteurs. L'annexe de sous-traitance n'y a pas sa place : elle lie le
+    client et son intégrateur, pas l'entreprise et ses clients.
+    """
+    base = conf.charger()
+    c = conf.contexte({**base, "mode": "agence"})
+    publies = set(conf.documents_disponibles(c))
+    for lien in conf.textes_site(c)["liens"]:
+        cle = lien["url"].rsplit("/legal/", 1)[1]
+        assert cle in publies
+        assert cle != "sous-traitance"
+
+
+def test_la_cli_donne_les_textes_du_site(conf, capsys):
+    import sys
+
+    argv = sys.argv
+    sys.argv = ["agent.juridique", "--site"]
+    try:
+        assert conf._cli() == 0
+    finally:
+        sys.argv = argv
+    sortie = capsys.readouterr().out
+    assert "PIED DE PAGE" in sortie
+    assert conf.MENTION_META in sortie
+    assert "/legal/confidentialite" in sortie

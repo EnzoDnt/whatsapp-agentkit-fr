@@ -1010,6 +1010,7 @@ async def lire_juridique():
         _avertissement_console,
         charger,
         etat_publication,
+        textes_site,
         verifier,
     )
 
@@ -1024,6 +1025,7 @@ async def lire_juridique():
         }
 
     base = (conf.get("publication") or {}).get("url_publique", "").rstrip("/")
+    c = contexte(conf)
     return {
         "configure": True,
         "url_publique": base,
@@ -1034,7 +1036,10 @@ async def lire_juridique():
         "etat": etat_publication(conf),
         # Unique endroit où l'avertissement de relecture est affiché : ici,
         # pour l'exploitant, et non sur les pages que ses clients consultent.
-        "avertissement": _avertissement_console(contexte(conf)),
+        "avertissement": _avertissement_console(c),
+        # Ce que l'exploitant place lui-même sur son site : le kit n'y a pas
+        # accès, il lui remet les textes tirés de la même configuration.
+        "site": textes_site(c),
         "problemes": verifier(conf),
         # Les trois champs attendus par le tableau de bord Meta. Les donner ici
         # évite d'aller les reconstruire à la main, et de se tromper de page :

@@ -265,6 +265,37 @@ def _tableau_tiers(c: dict) -> str:
     return "\n".join(lignes)
 
 
+def _formulaire_actif(c: dict) -> bool:
+    return bool((c.get("traitement") or {}).get("formulaire_whatsapp"))
+
+
+def _paragraphe_formulaire(c: dict) -> str:
+    """
+    Le cas où l'entreprise écrit la PREMIÈRE, après un formulaire de son site.
+
+    Le reste de la politique suppose que le client écrit le premier : son
+    message vaut accord pour la réponse, et pour rien d'autre. Dès qu'un
+    formulaire recueille un numéro pour que l'entreprise prenne contact, ce
+    premier message repose sur un consentement, qu'il faut annoncer ici et
+    pouvoir prouver.
+    """
+    if not _formulaire_actif(c):
+        return ""
+    e = c["entreprise"]
+    pd = c["protection_donnees"]
+    site = str(e.get("site_web") or "").strip()
+    ou = f"notre site ({site})" if site else "notre site"
+    return (
+        f"\n\nSi vous avez laissé votre numéro dans un formulaire de {ou}, vous "
+        f"avez coché une case par laquelle vous acceptez que {e['raison_sociale']} "
+        "vous contacte sur WhatsApp à ce numéro pour répondre à votre demande. "
+        "Ce premier message repose sur votre consentement (article 6.1.a du "
+        "RGPD). Nous conservons la date et le texte de cet accord, qui en font "
+        "la preuve. Vous pouvez le retirer à tout moment, en l'écrivant dans la "
+        f"conversation ou à {pd['email']}, et nous cessons alors de vous écrire."
+    )
+
+
 def politique_confidentialite(c: dict) -> str:
     e = c["entreprise"]
     t = c["traitement"]
@@ -313,6 +344,7 @@ def politique_confidentialite(c: dict) -> str:
         finalites=finalites,
         base=base,
         champ_3=(t.get('opt_in') or 'Vous initiez la conversation.').capitalize().rstrip('.'),
+        formulaire=_paragraphe_formulaire(c),
         tableau_tiers=_tableau_tiers(c),
         conservation=conservation,
         journaux=journaux,
@@ -472,6 +504,66 @@ def documents_disponibles(c: dict) -> dict:
     return dispo
 
 
+# ── Ce qui se publie sur le site de l'entreprise ─────────────────────────
+#
+# Les pages /legal couvrent l'agent. Le site de l'entreprise, celui qui figure
+# dans le portefeuille Meta Business et derrière l'adresse e-mail pro, reste à
+# la charge de l'utilisateur : le kit n'y a pas accès. Il lui remet donc les
+# textes à y placer, tirés de la même configuration que les documents, pour
+# qu'une seule identité et une seule formulation circulent.
+
+# Les règles de marque de WhatsApp interdisent de laisser croire à un
+# partenariat, un parrainage ou une approbation. Des pages qui parlent de
+# WhatsApp à chaque section, sur un domaine que Meta examine, le laissent
+# croire si rien ne dit le contraire. Même texte sur /legal et sur le site.
+MENTION_META = (
+    "Ce site ne fait pas partie de Meta, Facebook, Instagram ou WhatsApp, et "
+    "n'est ni approuvé, ni sponsorisé, ni administré par Meta. Facebook, "
+    "Instagram et WhatsApp sont des marques de Meta Platforms, Inc."
+)
+
+
+def consentement_formulaire(c: dict) -> str:
+    """
+    Libellé de la case à cocher d'un formulaire qui mène à WhatsApp.
+
+    La politique de messagerie de Meta veut un accord qui nomme l'entreprise
+    et dise que les messages arrivent sur WhatsApp. Une case non cochée par
+    défaut, plutôt qu'une phrase sous le bouton : c'est la forme qui prouve un
+    accord, et cette preuve revient à l'entreprise.
+    """
+    e = c["entreprise"]
+    pd = c["protection_donnees"]
+    base = (c.get("publication") or {}).get("url_publique", "").rstrip("/")
+    return (
+        f"J'accepte que {e['raison_sociale']} me contacte sur WhatsApp au numéro "
+        "indiqué, pour répondre à ma demande. Je peux demander l'arrêt de ces "
+        f"messages à tout moment, dans la conversation ou à {pd['email']}. "
+        f"Politique de confidentialité : {base}/legal/confidentialite"
+    )
+
+
+def textes_site(c: dict) -> dict:
+    """
+    Ce que l'utilisateur doit placer sur son site, prêt à copier.
+
+    L'annexe de sous-traitance n'y figure pas : elle lie le client et son
+    intégrateur, pas l'entreprise et ses propres clients.
+    """
+    base = (c.get("publication") or {}).get("url_publique", "").rstrip("/")
+    return {
+        "liens": [
+            {"titre": titre, "url": f"{base}/legal/{cle}"}
+            for cle, (titre, _) in documents_disponibles(c).items()
+            if cle != "sous-traitance"
+        ],
+        "mention_meta": MENTION_META,
+        "consentement_formulaire": (
+            consentement_formulaire(c) if _formulaire_actif(c) else None
+        ),
+    }
+
+
 # ── Rendu HTML ───────────────────────────────────────────────────────────
 #
 # Un convertisseur Markdown complet serait une dépendance de plus pour six
@@ -515,6 +607,8 @@ em{color:var(--doux)}
 nav{font-family:ui-sans-serif,system-ui,sans-serif;font-size:.88rem;
 margin-bottom:2.5rem;padding-bottom:1.2rem;border-bottom:1px solid var(--trait)}
 nav a{margin-right:1rem;display:inline-block;margin-bottom:.3rem}
+footer{margin-top:3rem;padding-top:1.2rem;border-top:1px solid var(--trait);
+font:.8rem/1.55 ui-sans-serif,system-ui,sans-serif;color:var(--doux)}
 """
 
 
@@ -618,7 +712,11 @@ def page_html(titre: str, markdown: str, c: dict) -> str:
         # est traité comme une violation, pas comme une préférence.
         ""
         f"<title>{_html.escape(titre)}</title><style>{_STYLE}</style></head>"
-        f"<body><main><nav>{liens}</nav>{_md_vers_html(markdown)}</main></body></html>"
+        f"<body><main><nav>{liens}</nav>{_md_vers_html(markdown)}"
+        # La mention de non-affiliation vit dans la page, pas dans les
+        # gabarits : elle ne fait pas partie du document qu'un juriste relit,
+        # et elle doit figurer sur chaque page sans qu'on y pense.
+        f"<footer>{_html.escape(MENTION_META)}</footer></main></body></html>"
     )
 
 
@@ -694,6 +792,14 @@ def verifier(conf: dict) -> list[str]:
     if url and not url.startswith("https://"):
         problemes.append("publication.url_publique doit être en HTTPS")
 
+    site = str((conf.get("entreprise") or {}).get("site_web", "") or "").strip()
+    if (conf.get("traitement") or {}).get("formulaire_whatsapp") and not site:
+        problemes.append(
+            "traitement.formulaire_whatsapp est activé mais entreprise.site_web "
+            "est vide : le formulaire vit sur ce site, et la politique de "
+            "confidentialité doit pouvoir le nommer"
+        )
+
     # Cohérence avec la configuration réellement en vigueur.
     if (conf.get("traitement") or {}).get("conservation_jours") is not None:
         problemes.append(
@@ -725,6 +831,9 @@ def _cli() -> int:
     p.add_argument("--verifier", action="store_true", help="contrôle le fichier")
     p.add_argument("--connu", action="store_true",
                    help="affiche ce que le kit déduit seul (JSON), pour l'assistant")
+    p.add_argument("--site", action="store_true",
+                   help="textes à placer sur le site de l'entreprise : pied de "
+                        "page, mention Meta, case de consentement du formulaire")
     p.add_argument("--pays", help="code pays : rappelle l'autorité de contrôle")
     p.add_argument("--chercher", metavar="NOM",
                    help="cherche une entreprise française (nom, SIREN ou SIRET) "
@@ -777,6 +886,23 @@ def _cli() -> int:
             "journalise_contenu": c["journalise_contenu"],
             "sous_traitants": [list(t) for t in c["sous_traitants"]],
         }, ensure_ascii=False, indent=2))
+        return 0
+
+    if a.site:
+        s = textes_site(contexte(conf))
+        print("PIED DE PAGE, sur chaque page du site\n")
+        for lien in s["liens"]:
+            print(f"  {lien['titre']} : {lien['url']}")
+        print(f"\n  {s['mention_meta']}")
+        if s["consentement_formulaire"]:
+            print("\nFORMULAIRE QUI MÈNE À WHATSAPP")
+            print("Libellé d'une case à cocher, non cochée par défaut :\n")
+            print(f"  {s['consentement_formulaire']}")
+            print("\nLe formulaire garde, avec chaque numéro reçu, la date et ce")
+            print("texte : c'est la preuve du consentement, et elle revient à")
+            print("l'entreprise.")
+        print("\nMêmes raison sociale, adresse et immatriculation sur le site, dans")
+        print("le portefeuille Meta Business et dans config/juridique.yaml.")
         return 0
 
     problemes = verifier(conf)

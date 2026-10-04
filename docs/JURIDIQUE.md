@@ -104,6 +104,35 @@ curl -sI https://votre-agent/legal/confidentialite | head -1
 Un examinateur ouvrira réellement ces adresses. Une URL qui renvoie 404 fait
 échouer l'App Review, sans autre explication qu'un refus.
 
+## 3 bis. Ce qui va sur votre site
+
+Les pages `/legal` couvrent l'agent. Le site de l'entreprise, celui qui figure
+dans le portefeuille Meta Business et derrière l'adresse e-mail pro, reste à
+votre charge : le kit n'y a pas accès. C'est pourtant là qu'on regarde qui vous
+êtes. Un domaine qui ne sert qu'à l'e-mail, ou une page vide, ne dit rien de
+vous.
+
+```bash
+python -m agent.juridique --site
+```
+
+donne les textes à y placer, tirés de votre configuration :
+
+- **En pied de chaque page** : les liens vers les documents publiés par l'agent,
+  et la mention de non-affiliation à Meta. Les règles de marque de WhatsApp
+  interdisent de laisser croire à un partenariat, un parrainage ou une
+  approbation. Les pages `/legal` portent déjà cette mention ; votre site doit
+  porter la même.
+- **Dans le formulaire qui mène à WhatsApp**, si vous en avez un (§ 4) : le
+  libellé de la case de consentement.
+
+Gardez la même identité partout. Raison sociale, adresse et immatriculation
+identiques sur le site, dans le portefeuille Meta et dans ces documents : une
+divergence entre deux pages est le genre de détail qu'un contrôle relève.
+
+La console affiche les mêmes textes dans *Réglages → Documents juridiques*,
+rubrique « À mettre sur votre site ».
+
 ## 4. L'opt-in, souvent négligé
 
 Depuis la mise à jour de novembre 2024 de la politique de messagerie, un
@@ -120,6 +149,23 @@ La distinction qui compte :
 
 Documentez la méthode dans `traitement.opt_in`. En cas de contestation, c'est à
 vous de prouver le consentement.
+
+### Le cas du formulaire
+
+Votre site recueille le numéro de la personne, et c'est vous qui écrivez le
+premier (rappel, devis, envoi d'un document) : passez
+`traitement.formulaire_whatsapp` à `true` et renseignez `entreprise.site_web`.
+La politique de confidentialité décrit alors ce consentement, et `--site` donne
+le libellé de la case à cocher. Il nomme l'entreprise, dit que les messages
+arrivent sur WhatsApp, et rappelle qu'on peut les arrêter.
+
+Utilisez une case **non cochée par défaut**, plutôt qu'une phrase sous le
+bouton : c'est la forme qui prouve un accord. Le formulaire doit garder, avec
+chaque numéro reçu, la date et le texte accepté. Le kit ne voit pas votre
+formulaire, il ne peut pas le faire à votre place.
+
+Un simple bouton « Écrire sur WhatsApp » n'entre pas dans ce cas : la personne
+écrit la première, c'est le cas normal du gabarit.
 
 ## 5. Ce qui change selon le pays
 

@@ -29,7 +29,7 @@ partir de vos messages, et nous ne construisons aucun profil publicitaire.
 
 Ce contact vaut accord pour que nous vous répondions. Il ne vaut **pas** accord
 pour recevoir des messages promotionnels : ceux-ci supposent un consentement
-distinct, que vous pouvez retirer à tout moment.
+distinct, que vous pouvez retirer à tout moment.{formulaire}
 
 ## Une intelligence artificielle rédige les réponses
 
